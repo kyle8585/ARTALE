@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import json
 
-# 1. 初始化 Supabase 連線 (請確保 URL 和 Key 正確)
+# 1. 初始化 Supabase 連線
 url = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 supabase: Client = create_client(url, key)
@@ -10,7 +10,7 @@ supabase: Client = create_client(url, key)
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 st.title("🍁 Artale 線上組隊中心")
 
-# --- 2. 定義資料與清單 (必須放在使用它們的程式碼之前) ---
+# --- 2. 定義清單變數 ---
 boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王"]
 pq_list = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神"]
 grind_list = ["蛋龍"]
@@ -37,20 +37,18 @@ with st.sidebar:
                     "level": level,
                     "target": target,
                     "note": note,
-                    "members": [] # 初始化成員清單為空陣列
+                    "members": []
                 }
-                # 從資料庫讀取資料
                 try:
-                    # 確保這一行結尾是 .execute()
-                    response = supabase.table("party_posts").select("*").order("created_at", desc=True).execute()
-                    posts = response.data
+                    supabase.table("party_posts").insert(data).execute()
+                    st.success("發布成功！")
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"資料讀取失敗：{e}")
-                    posts = []
+                    st.error(f"發布失敗：{e}")
+            else:
+                st.error("請輸入角色 ID")
 
 # --- 4. 主頁面：分類顯示 ---
 tabs = st.tabs(categories)
 
-# 從資料庫讀取資料
-try:
-    response = supabase.table("party_posts").select("*").order("created_at", desc=True).execute()
+# 從資料庫讀取資料 (這裡就是你剛剛報錯的地方，現在已經補齊 except)
