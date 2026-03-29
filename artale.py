@@ -39,14 +39,14 @@ with st.sidebar:
                     "note": note,
                     "members": [] # 初始化成員清單為空陣列
                 }
+                # 從資料庫讀取資料
                 try:
-                    supabase.table("party_posts").insert(data).execute()
-                    st.success("發布成功！")
-                    st.rerun()
+                    # 確保這一行結尾是 .execute()
+                    response = supabase.table("party_posts").select("*").order("created_at", desc=True).execute()
+                    posts = response.data
                 except Exception as e:
-                    st.error(f"發布失敗：{e}")
-            else:
-                st.error("請輸入角色 ID")
+                    st.error(f"資料讀取失敗：{e}")
+                    posts = []
 
 # --- 4. 主頁面：分類顯示 ---
 tabs = st.tabs(categories)
