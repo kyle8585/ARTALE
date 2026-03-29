@@ -53,4 +53,4 @@ tabs = st.tabs(categories)
 
 # 從資料庫讀取資料
 try:
-    response = supabase.table("party_posts").select("*").order("created_at", desc
+    response = supabase.table("party_posts").select("*").order("created_at", desc=True).execute()
