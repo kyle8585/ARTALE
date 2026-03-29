@@ -71,16 +71,15 @@ for i, cat_name in enumerate(categories):
 
         for p in filtered:
             m_list = p.get('members', [])
-            member_count = len(m_list) + 1  # 隊員 + 1位隊長
+            member_count = len(m_list) + 1
 
-            # 摺疊標題設計
-            expander_title = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {member_count}/6"
+            # 摺疊標題列
+            expander_label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {member_count}/6"
 
-            with st.expander(expander_title, expanded=False):
-                # 內部資訊排版
+            # 關鍵：這裡的 key 必須加上 cat_name 避免與其他 Tab 重複
+            with st.expander(expander_label, expanded=False):
                 col_info, col_chat = st.columns([1, 1])
 
-                # 左側：成員與管理
                 with col_info:
                     st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
                     if p.get('note'):
@@ -93,6 +92,7 @@ for i, cat_name in enumerate(categories):
                         for idx, m in enumerate(m_list):
                             mc1, mc2 = st.columns([4, 1])
                             mc1.write(f" └ {m['name']} (Lv.{m.get('level', '??')} {m['job']})")
+                            # 踢除按鈕 key 修正
                             if mc2.button("❌", key=f"kick_{cat_name}_{p['id']}_{idx}"):
                                 new_m_list = [member for i_m, member in enumerate(m_list) if i_m != idx]
                                 supabase.table("party_posts").update({"members": new_m_list}).eq("id",
@@ -101,15 +101,15 @@ for i, cat_name in enumerate(categories):
                     else:
                         st.caption("目前尚無隊員")
 
-                    # 功能按鈕
                     st.write("")
                     b1, b2, b3 = st.columns(3)
                     with b1:
                         with st.popover("➕ 加入", use_container_width=True):
-                            m_name = st.text_input("你的 ID", key=f"in_{p['id']}")
-                            m_job = st.selectbox("職業", all_jobs, key=f"ij_{p['id']}")
-                            m_lvl = st.number_input("等級", 1, 200, 100, key=f"il_{p['id']}")
-                            if st.button("確認加入", key=f"ib_{p['id']}", use_container_width=True):
+                            # 輸入欄位 key 修正
+                            m_name = st.text_input("你的 ID", key=f"in_name_{cat_name}_{p['id']}")
+                            m_job = st.selectbox("職業", all_jobs, key=f"in_job_{cat_name}_{p['id']}")
+                            m_lvl = st.number_input("等級", 1, 200, 100, key=f"in_lvl_{cat_name}_{p['id']}")
+                            if st.button("確認加入", key=f"in_btn_{cat_name}_{p['id']}", use_container_width=True):
                                 if m_name:
                                     m_list.append({"name": m_name, "job": m_job, "level": m_lvl})
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
@@ -117,16 +117,18 @@ for i, cat_name in enumerate(categories):
                                     st.rerun()
                     with b2:
                         with st.popover("✏️ 標題", use_container_width=True):
-                            edit_t = st.text_input("修改標題", value=p.get('title', ''), key=f"et_{p['id']}")
-                            if st.button("儲存", key=f"eb_{p['id']}", use_container_width=True):
+                            # 修改標題 key 修正
+                            edit_t = st.text_input("修改標題", value=p.get('title', ''),
+                                                   key=f"ed_t_{cat_name}_{p['id']}")
+                            if st.button("儲存", key=f"ed_btn_{cat_name}_{p['id']}", use_container_width=True):
                                 supabase.table("party_posts").update({"title": edit_t}).eq("id", p["id"]).execute()
                                 st.rerun()
                     with b3:
-                        if st.button("🗑️ 撤團", key=f"del_{p['id']}", use_container_width=True):
+                        # 撤團按鈕 key 修正
+                        if st.button("🗑️ 撤團", key=f"del_btn_{cat_name}_{p['id']}", use_container_width=True):
                             supabase.table("party_posts").delete().eq("id", p["id"]).execute()
                             st.rerun()
 
-                # 右側：聊天室
                 with col_chat:
                     st.write("💬 **隊伍聊天室**")
                     chat_box = st.container(height=180)
@@ -136,11 +138,13 @@ for i, cat_name in enumerate(categories):
                         for m in msg_list:
                             st.markdown(f"**{m['user']}:** {m['text']}")
 
-                    with st.form(key=f"chat_f_{p['id']}", clear_on_submit=True):
+                    # 聊天表單 key 修正
+                    with st.form(key=f"chat_form_{cat_name}_{p['id']}", clear_on_submit=True):
                         c1, c2 = st.columns([4, 1])
-                        u_msg = c1.text_input("訊息", placeholder="打聲招呼吧", key=f"msg_in_{p['id']}")
+                        u_msg = c1.text_input("訊息", placeholder="說點什麼...", key=f"msg_input_{cat_name}_{p['id']}")
                         if c2.form_submit_button("送出") and u_msg:
-                            sender = st.session_state.get(f"in_{p['id']}", "匿名")
+                            # 嘗試抓取 session_state 裡的 ID 作為發話者
+                            sender = st.session_state.get(f"in_name_{cat_name}_{p['id']}", "匿名")
                             msg_list.append({"user": sender if sender else "匿名", "text": u_msg})
                             supabase.table("party_posts").update({"messages": msg_list}).eq("id", p["id"]).execute()
                             st.rerun()
