@@ -177,7 +177,7 @@ else:
             with st.expander("🙋 我要待組"):
                 with st.form("w_form", border=False):
                     w_target = st.selectbox("想參加的任務", task_options, key="w_target")
-                    w_note = st.text_input("備註")
+                    w_note = st.text_input("備註:打上可配合時間佳")
                     w_char_sel = st.selectbox("使用角色", char_options, key="w_char")
                     if st.form_submit_button("登錄待組", use_container_width=True):
                         if "---" not in w_target:
