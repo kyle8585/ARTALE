@@ -96,19 +96,24 @@ if st.session_state.user is None:
         st.markdown("<h1 style='text-align: center;'>🍁 Artale 組隊中心</h1>", unsafe_allow_html=True)
         t1, t2 = st.tabs(["🔐 帳號登入", "📝 快速註冊"])
         with t1:
-            with st.form("login_form"):
-                acc = st.text_input("帳號")
-                pwd = st.text_input("密碼", type="password")
-                if st.form_submit_button("立即登入", use_container_width=True):
-                    if acc and pwd:
-                        with st.spinner("正在驗證中..."):
-                            try:
-                                res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
-                                if res.user:
-                                    st.session_state.user = res.user
-                                    st.rerun()
-                            except:
-                                st.error("❌ 帳號或密碼錯誤")
+            # 移除原本的 with st.form("login_form"):，改用非 form 方式或確保成功後立即中斷
+            acc = st.text_input("帳號")
+            pwd = st.text_input("密碼", type="password")
+            if st.button("立即登入", use_container_width=True):
+                if acc and pwd:
+                    with st.spinner("正在驗證中..."):
+                        try:
+                            # 驗證登入
+                            res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
+                            if res.user:
+                                # 成功登入後，將資料寫入 session_state
+                                st.session_state.user = res.user
+                                # 關鍵：設定完後立即重新整理頁面，確保下一次運行直接進入 else 區塊
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 帳號或密碼錯誤")
+                else:
+                    st.warning("請輸入帳號與密碼")
         with t2:
             with st.form("signup_form"):
                 new_acc = st.text_input("帳號")
@@ -118,9 +123,17 @@ if st.session_state.user is None:
                     if input_key == REG_SECRET:
                         try:
                             supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
-                            st.success("✅ 註冊成功")
+                            st.success("✅ 註冊成功，現在可以登入了")
                         except:
-                            st.error("註冊失敗")
+                            st.error("註冊失敗，帳號可能已存在")
+                    else:
+                        st.error("邀請碼錯誤")
+
+    # 確保未登入時不會執行後續邏輯
+    st.stop()
+
+    # --- 以下是 else 區塊的邏輯 (已登入) ---
+    current_user = st.session_state.user
 
 else:
     current_user = st.session_state.user
