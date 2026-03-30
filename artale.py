@@ -7,7 +7,7 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-# ⭐ 管理員與註冊金鑰設定
+# 管理員與註冊金鑰
 ADMIN_ACC = "akuy7788"
 REG_SECRET = "場外artale"
 
@@ -48,7 +48,7 @@ if st.session_state.user is None:
             with st.form("signup_form"):
                 new_acc = st.text_input("自訂帳號")
                 new_pw = st.text_input("設定密碼 (至少6位)", type="password")
-                input_key = st.text_input("註冊金鑰", type="password", help="請輸入正確的金鑰才能註冊")
+                input_key = st.text_input("註冊金鑰", type="password")
                 if st.form_submit_button("註冊帳號", use_container_width=True):
                     if input_key != REG_SECRET:
                         st.error("❌ 金鑰錯誤，無法註冊！")
@@ -153,9 +153,8 @@ else:
                 is_leader = (str(p.get('owner_id')) == str(current_user.id))
                 has_admin_power = (is_leader or is_admin)
 
-                # --- 優化後的列表寬度控制 ---
-                # 使用 [0.4, 0.05, 0.55] 這種比例讓前端資訊與按鈕緊湊在一起，後面留白
-                col_info, col_del, _ = st.columns([0.45, 0.05, 0.5])
+                # --- 介面拉長：調整為 0.9 : 0.05 ---
+                col_info, col_del, _ = st.columns([0.85, 0.05, 0.1])
 
                 with col_info:
                     label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
@@ -196,49 +195,11 @@ else:
                         st.write("")
                         btn_c1, btn_c2 = st.columns(2)
                         with btn_c1:
-                            if not is_leader:
-                                with st.popover("➕ 加入隊伍", use_container_width=True):
-                                    if char_options:
-                                        join_label = st.selectbox("選擇角色", char_options,
-                                                                  key=f"sel_join_{cat_name}_{p['id']}")
-                                        if st.button("確認加入", key=f"btn_join_{cat_name}_{p['id']}",
-                                                     use_container_width=True):
-                                            target_c = char_map[join_label]
-                                            m_list.append({
-                                                "name": target_c['char_name'],
-                                                "job": target_c['job'],
-                                                "level": target_c['level'],
-                                                "owner_id": str(current_user.id)
-                                            })
-                                            supabase.table("party_posts").update({"members": m_list}).eq("id", p[
-                                                "id"]).execute();
-                                            st.rerun()
-                                    else:
-                                        st.warning("請先在左側建立角色！")
-
-                        with btn_c2:
-                            if has_admin_power:
-                                with st.popover("✏️ 修改資訊", use_container_width=True):
-                                    nt = st.text_input("新標題", value=p['title'],
-                                                       key=f"edit_title_{cat_name}_{p['id']}")
-                                    nn = st.text_input("新備註", value=p['note'], key=f"edit_note_{cat_name}_{p['id']}")
-                                    if st.button("更新", key=f"btn_update_{cat_name}_{p['id']}",
-                                                 use_container_width=True):
-                                        supabase.table("party_posts").update({"title": nt, "note": nn}).eq("id", p[
-                                            "id"]).execute();
-                                        st.rerun()
-
-                    with col2:
-                        st.write("💬 隊伍聊天室")
-                        c_box = st.container(height=250)
-                        msgs = p.get('messages', [])
-                        with c_box:
-                            for m in msgs: st.markdown(f"**{m['user']}:** {m['text']}")
-                        with st.form(key=f"form_chat_{cat_name}_{p['id']}", clear_on_submit=True):
-                            f1, f2 = st.columns([4, 1])
-                            u_msg = f1.text_input("訊息內容", key=f"input_chat_{cat_name}_{p['id']}")
-                            if f2.form_submit_button("送出") and u_msg:
-                                sender_name = my_chars[0]['char_name'] if my_chars else my_acc
-                                msgs.append({"user": sender_name, "text": u_msg})
-                                supabase.table("party_posts").update({"messages": msgs}).eq("id", p["id"]).execute();
-                                st.rerun()
+                            # 無論是否為隊長，只要登入就能看到加入按鈕
+                            with st.popover("➕ 加入隊伍", use_container_width=True):
+                                if is_leader or is_admin:
+                                    st.write("🔧 **手動登記隊員 (隊長/管理員功能)**")
+                                    manual_name = st.text_input("隊員名稱", key=f"m_n_{cat_name}_{p['id']}")
+                                    manual_job = st.selectbox("隊員職業", all_jobs, key=f"m_j_{cat_name}_{p['id']}")
+                                    manual_lvl = st.number_input("隊員等級", 1, 200, 100,
+                                                                 key=f"m_l_{cat_name}_{p['id']}")
