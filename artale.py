@@ -7,7 +7,7 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-# ⭐ 管理員帳號設定
+# ⭐ 管理員帳號設定 (請確保你登入的帳號是這個名字)
 ADMIN_ACC = "admin"
 
 
@@ -66,6 +66,7 @@ else:
     all_targets = pq_list + boss_list + grind_list
     categories = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
 
+    # 讀取角色
     try:
         my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
     except:
@@ -118,6 +119,7 @@ else:
                      "messages": []}).execute();
                 st.rerun()
 
+    # 主頁面
     tabs = st.tabs(categories)
     posts = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
 
@@ -132,45 +134,51 @@ else:
             else:
                 filtered = [p for p in posts if p['target'] in grind_list]
 
-            if not filtered: st.info(f"目前沒有 {cat_name} 的隊伍。"); continue
-
             for p in filtered:
                 m_list = p.get('members', [])
+                # 重要權限判斷
                 is_owner = (str(p.get('owner_id')) == str(current_user.id))
-                has_admin_power = (is_owner or is_admin)  # 判定是否有管理權限
+                has_admin_power = (is_owner or is_admin)
+
                 label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
 
                 with st.expander(label):
                     col1, col2 = st.columns([1, 1])
                     with col1:
                         st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
-                        if p.get('note'): st.caption(f"📝 備註: {p['note']}")
+                        if p.get('note'): st.info(f"📝 備註: {p['note']}")
                         st.code(f"/找人 {p['char_name']}", language="bash")
-                        st.write("👥 **隊員:**")
+
+                        st.divider()
+                        st.write("👥 **隊員名單:**")
                         for idx, m in enumerate(m_list):
-                            c1, c2 = st.columns([4, 1])
+                            c1, c2 = st.columns([4, 1.5])
                             c1.write(f" └ {m['name']} (Lv.{m.get('level', '?')} {m['job']})")
 
-                            m_is_me = (str(m.get('owner_id')) == str(current_user.id))
+                            # 踢除與退出邏輯
+                            m_owner_id = str(m.get('owner_id', ''))
                             if has_admin_power:
-                                if c2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}"):
+                                if c2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}", size="small"):
                                     m_list.pop(idx);
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                  p["id"]).execute();
                                     st.rerun()
-                            elif m_is_me:
-                                if c2.button("退出", key=f"ex_{cat_name}_{p['id']}_{idx}"):
+                            elif m_owner_id == str(current_user.id):
+                                if c2.button("退出", key=f"ex_{cat_name}_{p['id']}_{idx}", size="small"):
                                     m_list.pop(idx);
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                  p["id"]).execute();
                                     st.rerun()
 
                         st.write("")
-                        b1, b2, b3 = st.columns(3)
-                        with b1:
+                        # 功能按鈕區
+                        btn_col1, btn_col2, btn_col3 = st.columns(3)
+
+                        # 按鈕1: 加入 (非隊長才顯示)
+                        with btn_col1:
                             if not is_owner:
-                                with st.popover("➕ 加入", use_container_width=True):
-                                    join_char = st.selectbox("使用角色", ["手動輸入"] + char_options,
+                                with st.popover("➕ 加入隊伍", use_container_width=True):
+                                    join_char = st.selectbox("選角色", ["手動輸入"] + char_options,
                                                              key=f"jc_{cat_name}_{p['id']}")
                                     j_job = st.selectbox("職業", all_jobs,
                                                          key=f"jj_{cat_name}_{p['id']}") if join_char == "手動輸入" else ""
@@ -188,35 +196,36 @@ else:
                                                                                                      p["id"]).execute();
                                         st.rerun()
                             else:
-                                st.button("隊長本人", disabled=True, use_container_width=True,
-                                          key=f"ob_{cat_name}_{p['id']}")
+                                st.button("⭐ 隊長控制中", disabled=True, use_container_width=True)
 
-                        with b2:
-                            if has_admin_power:  # 管理員與隊長皆可修改
-                                with st.popover("✏️ 修改", use_container_width=True):
-                                    nt = st.text_input("修改標題", value=p['title'], key=f"et_{cat_name}_{p['id']}")
-                                    nn = st.text_input("修改備註", value=p['note'], key=f"en_{cat_name}_{p['id']}")
-                                    if st.button("更新資訊", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
+                        # 按鈕2: 修改 (隊長或管理員才顯示)
+                        with btn_col2:
+                            if has_admin_power:
+                                with st.popover("✏️ 修改資訊", use_container_width=True):
+                                    nt = st.text_input("新標題", value=p['title'], key=f"et_{cat_name}_{p['id']}")
+                                    nn = st.text_input("新備註", value=p['note'], key=f"en_{cat_name}_{p['id']}")
+                                    if st.button("更新", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
                                         supabase.table("party_posts").update({"title": nt, "note": nn}).eq("id", p[
                                             "id"]).execute();
                                         st.rerun()
 
-                        with b3:
-                            if has_admin_power:  # 管理員與隊長皆可撤團
-                                if st.button("🔥 撤團" if is_admin and not is_owner else "🗑️ 撤團",
-                                             key=f"db_{cat_name}_{p['id']}", type="primary", use_container_width=True):
+                        # 按鈕3: 撤團 (隊長或管理員才顯示)
+                        with btn_col3:
+                            if has_admin_power:
+                                if st.button("🗑️ 撤銷組隊", key=f"db_{cat_name}_{p['id']}", type="primary",
+                                             use_container_width=True):
                                     supabase.table("party_posts").delete().eq("id", p["id"]).execute();
                                     st.rerun()
 
                     with col2:
-                        st.write("💬 聊天室")
-                        c_box = st.container(height=180)
+                        st.write("💬 隊伍聊天室")
+                        c_box = st.container(height=250)
                         msgs = p.get('messages', [])
                         with c_box:
                             for m in msgs: st.markdown(f"**{m['user']}:** {m['text']}")
                         with st.form(key=f"cf_{cat_name}_{p['id']}", clear_on_submit=True):
                             c1, c2 = st.columns([4, 1])
-                            u_msg = c1.text_input("訊息", key=f"mi_{cat_name}_{p['id']}")
+                            u_msg = c1.text_input("訊息內容", key=f"mi_{cat_name}_{p['id']}")
                             if c2.form_submit_button("送出") and u_msg:
                                 msgs.append({"user": my_acc, "text": u_msg});
                                 supabase.table("party_posts").update({"messages": msgs}).eq("id", p["id"]).execute();
