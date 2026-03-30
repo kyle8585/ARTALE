@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta, timezone
-import time  # 用於解決登入與資料庫寫入的時間差問題
+import time
 
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
@@ -9,7 +9,7 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 # 精確 CSS 修正
 st.markdown("""
 <style>
-    /* 1. 基礎間距修正 */
+    /* 基礎間距修正 */
     [data-testid="stForm"] [data-testid="stVerticalBlock"], 
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
     [data-testid="stPopover"] [data-testid="stVerticalBlock"] {
@@ -23,7 +23,7 @@ st.markdown("""
         margin-bottom: -8px !important;
     }
 
-    /* 2. 特殊樣式：已加入隊伍 (橘色) */
+    /* 特殊樣式：已加入隊伍 (橘色) */
     .joined-party [data-testid="stExpander"] {
         border: 2px solid #e67e22 !important;
         background-color: rgba(230, 126, 34, 0.05) !important;
@@ -34,7 +34,7 @@ st.markdown("""
         font-weight: bold !important; 
     }
 
-    /* 3. 特殊樣式：隊伍已滿 (紅色/灰色感) */
+    /* 特殊樣式：隊伍已滿 (紅色) */
     .full-party [data-testid="stExpander"] {
         border: 2px solid #ff4b4b !important;
         background-color: rgba(255, 75, 75, 0.05) !important;
@@ -130,8 +130,8 @@ else:
     with st.sidebar:
         st.header(f"👤 {my_acc}")
         if st.button("登出系統", use_container_width=True):
-            supabase.auth.sign_out();
-            st.session_state.user = None;
+            supabase.auth.sign_out()
+            st.session_state.user = None
             st.rerun()
         st.divider()
 
@@ -140,7 +140,7 @@ else:
                 c1, c2 = st.columns([3, 1])
                 c1.caption(f"{c['char_name']} (Lv.{c['level']} {c['job']})")
                 if c2.button("🗑️", key=f"del_c_{c['id']}"):
-                    supabase.table("user_characters").delete().eq("id", c['id']).execute();
+                    supabase.table("user_characters").delete().eq("id", c['id']).execute()
                     st.rerun()
             st.divider()
             nc_name = st.text_input("新增角色名")
@@ -150,7 +150,7 @@ else:
                 if nc_name:
                     supabase.table("user_characters").insert(
                         {"owner_id": str(current_user.id), "char_name": nc_name, "job": nc_job,
-                         "level": nc_lvl}).execute();
+                         "level": nc_lvl}).execute()
                     st.rerun()
 
         if my_chars:
@@ -172,8 +172,8 @@ else:
                                 "char_name": c['char_name'], "job": c['job'], "level": c['level'],
                                 "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
                                 "note": "TYPE_PARTY"
-                            }).execute();
-                            time.sleep(0.5);
+                            }).execute()
+                            time.sleep(0.5)
                             st.rerun()
 
             with st.expander("🙋 我要待組"):
@@ -189,8 +189,8 @@ else:
                                 "char_name": c['char_name'], "job": c['job'], "level": c['level'],
                                 "target": w_target, "owner_id": str(current_user.id), "members": [], "messages": [],
                                 "note": "TYPE_WAITING"
-                            }).execute();
-                            time.sleep(0.5);
+                            }).execute()
+                            time.sleep(0.5)
                             st.rerun()
 
     # --- 5. 主頁面 ---
@@ -223,7 +223,6 @@ else:
                         is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
                             p['owner_id']) == str(current_user.id)
 
-                        # 取得開打時間 (處理舊資料可能沒有此欄位的情況)
                         p_time_val = p.get('start_time', '現打')
 
                         col_m, col_d = st.columns([0.94, 0.06])
@@ -237,13 +236,27 @@ else:
                                 status_class = "joined-party"
 
                             st.markdown(f'<div class="{status_class}">', unsafe_allow_html=True)
-                            # 摺疊時顯示： 狀態 | 目標 | 標題 | 時間 | 人數
                             exp_label = f"{full_tag}【{p['target']}】{p['title']} ｜ 🕒 {p_time_val} ｜ 👥 {cur_count}/6"
                             with st.expander(exp_label):
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     st.markdown(f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']})")
                                     st.markdown(f"⏰ **預計時間**：{p_time_val}")
+
+                                    # --- 新增：管理功能 (僅限隊長與管理員) ---
+                                    if str(p['owner_id']) == str(current_user.id) or is_admin:
+                                        with st.popover("⚙️ 管理隊伍 (修改標題/時間)", use_container_width=True):
+                                            new_title = st.text_input("編輯標題", value=p['title'], key=f"et_{p['id']}")
+                                            new_time = st.text_input("編輯時間", value=p_time_val, key=f"es_{p['id']}")
+                                            if st.button("更新隊伍資訊", key=f"ub_{p['id']}", use_container_width=True):
+                                                supabase.table("party_posts").update({
+                                                    "title": new_title,
+                                                    "start_time": new_time
+                                                }).eq("id", p['id']).execute()
+                                                st.success("更新成功！")
+                                                time.sleep(0.5)
+                                                st.rerun()
+
                                     st.divider()
                                     for m_idx, m in enumerate(m_list):
                                         mc1, mc2 = st.columns([4, 1.5])
@@ -254,9 +267,9 @@ else:
                                         if str(p['owner_id']) == str(current_user.id) or is_admin or str(
                                                 m.get('owner_id')) == str(current_user.id):
                                             if mc2.button("退出", key=f"k_{cat_name}_{p['id']}_{m_idx}"):
-                                                m_list.pop(m_idx);
+                                                m_list.pop(m_idx)
                                                 supabase.table("party_posts").update({"members": m_list}).eq("id", p[
-                                                    'id']).execute();
+                                                    'id']).execute()
                                                 st.rerun()
 
                                     if not is_full:
@@ -272,7 +285,7 @@ else:
                                                                    "owner_id": str(current_user.id)})
                                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                                  p[
-                                                                                                                     'id']).execute();
+                                                                                                                     'id']).execute()
                                                     st.rerun()
                                             with sub_t2:
                                                 g_name = st.text_input("路人名稱", key=f"gn_{cat_name}_{p['id']}")
@@ -284,10 +297,10 @@ else:
                                                         m_list.append({"name": g_name, "job": g_job, "level": g_lvl,
                                                                        "is_guest": True, "added_by": my_acc})
                                                         supabase.table("party_posts").update({"members": m_list}).eq(
-                                                            "id", p['id']).execute();
+                                                            "id", p['id']).execute()
                                                         st.rerun()
                                     else:
-                                        st.error("🚫 隊伍已滿，無法加入更多隊員。")
+                                        st.error("🚫 隊伍已滿")
                                 with c2:
                                     st.write("💬 聊天室")
                                     msgs = p.get('messages', [])
@@ -299,13 +312,13 @@ else:
                                             if txt:
                                                 msgs.append({"user": my_chars[0]['char_name'], "text": txt})
                                                 supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
-                                                    'id']).execute();
+                                                    'id']).execute()
                                                 st.rerun()
                             st.markdown('</div>', unsafe_allow_html=True)
                         with col_d:
                             if str(p['owner_id']) == str(current_user.id) or is_admin:
                                 if st.button("🗑️", key=f"dp_{cat_name}_{p['id']}"):
-                                    supabase.table("party_posts").delete().eq("id", p['id']).execute();
+                                    supabase.table("party_posts").delete().eq("id", p['id']).execute()
                                     st.rerun()
 
         with main_tab2:
@@ -323,5 +336,5 @@ else:
                 with ca:
                     if str(w['owner_id']) == str(current_user.id) or is_admin:
                         if st.button("撤回", key=f"dw_{w['id']}"):
-                            supabase.table("party_posts").delete().eq("id", w['id']).execute();
+                            supabase.table("party_posts").delete().eq("id", w['id']).execute()
                             st.rerun()
