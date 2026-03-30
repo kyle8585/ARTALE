@@ -105,11 +105,8 @@ else:
                 if st.form_submit_button("完成設定並進入大廳", use_container_width=True):
                     if new_name:
                         supabase.table("user_characters").insert({
-                            "owner_id": str(current_user.id),
-                            "char_name": new_name,
-                            "job": new_job,
-                            "level": new_lvl
-                        }).execute()
+                            "owner_id": str(current_user.id), "char_name": new_name, "job": new_job, "level": new_lvl
+                        }).execute();
                         st.rerun()
                     else:
                         st.error("請輸入角色名稱")
@@ -119,15 +116,22 @@ else:
                 st.rerun()
 
     else:
-        boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王"]
-        pq_list = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神"]
+        # 定義分類任務列表
+        boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "暗黑龍王"]
+        pq_list = ["101", "女神", "金勾海賊王", "羅密歐與茱麗葉"]
         grind_list = ["蛋龍"]
-        all_targets = pq_list + boss_list + grind_list
+
+        # 建立帶有分隔標籤的選單
+        task_options = (
+                ["--- Boss遠征 ---"] + boss_list +
+                ["--- 組隊任務 ---"] + pq_list +
+                ["--- 團練 ---"] + grind_list
+        )
 
         char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
         char_options = list(char_map.keys())
 
-        # --- 4. 側邊欄 (全面折疊化) ---
+        # --- 4. 側邊欄 ---
         with st.sidebar:
             st.header(f"👤 {my_acc}")
             if st.button("登出系統", use_container_width=True):
@@ -137,7 +141,7 @@ else:
 
             st.divider()
 
-            # 角色管理折疊
+            # 1. 我的角色管理
             with st.expander("🛡️ 我的角色管理", expanded=False):
                 for c in my_chars:
                     c1, c2 = st.columns([3, 1])
@@ -155,37 +159,45 @@ else:
                          "level": nc_lvl}).execute();
                     st.rerun()
 
-            # 我要開團折疊
+            # 2. 我要開團 (順序：目標 -> 標題 -> 角色)
             with st.expander("📝 我要開團", expanded=False):
                 with st.form("party_form", border=False):
+                    t_target = st.selectbox("目標任務", task_options)
+                    t_title = st.text_input("隊伍標題 (例：連7拉圖、缺標賊)")
                     s_char = st.selectbox("選擇角色", char_options)
-                    t_title = st.text_input("隊伍標題")
-                    t_target = st.selectbox("目標任務", all_targets)
-                    if st.form_submit_button("發布組隊", use_container_width=True):
-                        c = char_map[s_char]
-                        supabase.table("party_posts").insert({
-                            "title": t_title if t_title else f"{c['char_name']} 的團",
-                            "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                            "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
-                            "note": "TYPE_PARTY"
-                        }).execute();
-                        st.rerun()
 
-            # 我要待組折疊
+                    if st.form_submit_button("發布組隊", use_container_width=True):
+                        if "---" in t_target:
+                            st.error("請選擇有效的任務標籤")
+                        else:
+                            c = char_map[s_char]
+                            supabase.table("party_posts").insert({
+                                "title": t_title if t_title else f"{c['char_name']} 的團",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
+                                "note": "TYPE_PARTY"
+                            }).execute();
+                            st.rerun()
+
+            # 3. 我要待組 (順序：目標 -> 標題 -> 角色)
             with st.expander("🙋 我要待組", expanded=False):
                 with st.form("waiting_form", border=False):
-                    w_char = st.selectbox("選擇角色", char_options, key="w_c")
-                    w_target = st.selectbox("想參加的任務", all_targets, key="w_t")
+                    w_target = st.selectbox("想參加的任務", task_options, key="w_t")
                     w_note = st.text_input("留言 (例：熟圖、有火眼)", key="w_n")
+                    w_char = st.selectbox("選擇角色", char_options, key="w_c")
+
                     if st.form_submit_button("登錄待組", use_container_width=True):
-                        c = char_map[w_char]
-                        supabase.table("party_posts").insert({
-                            "title": w_note if w_note else "徵求隊伍中",
-                            "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                            "target": w_target, "owner_id": str(current_user.id),
-                            "note": "TYPE_WAITING"
-                        }).execute();
-                        st.rerun()
+                        if "---" in w_target:
+                            st.error("請選擇有效的任務標籤")
+                        else:
+                            c = char_map[w_char]
+                            supabase.table("party_posts").insert({
+                                "title": w_note if w_note else "徵求隊伍中",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": w_target, "owner_id": str(current_user.id),
+                                "note": "TYPE_WAITING"
+                            }).execute();
+                            st.rerun()
 
         # --- 5. 主頁面 ---
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
@@ -196,19 +208,20 @@ else:
             if exp: d['expiry_label'] = exp; all_data.append(d)
 
         with main_tab1:
-            cats = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
+            cats = ["全部", "Boss遠征", "組隊任務", "團練"]
             sub_tabs = st.tabs(cats)
             party_posts = [p for p in all_data if p.get('note') != "TYPE_WAITING"]
             for idx, cat in enumerate(cats):
                 with sub_tabs[idx]:
                     if cat == "全部":
                         f = party_posts
-                    elif cat == "BOSS遠征":
+                    elif cat == "Boss遠征":
                         f = [p for p in party_posts if p['target'] in boss_list]
                     elif cat == "組隊任務":
                         f = [p for p in party_posts if p['target'] in pq_list]
                     else:
                         f = [p for p in party_posts if p['target'] in grind_list]
+
                     for p in f:
                         m_list = p.get('members', [])
                         has_admin = (str(p['owner_id']) == str(current_user.id) or is_admin)
@@ -261,14 +274,14 @@ else:
 
         with main_tab2:
             st.caption("正在找團的玩家：")
-            cats_w = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
+            cats_w = ["全部", "Boss遠征", "組隊任務", "團練"]
             sub_tabs_w = st.tabs(cats_w)
             wait_posts = [p for p in all_data if p.get('note') == "TYPE_WAITING"]
             for idx, cat in enumerate(cats_w):
                 with sub_tabs_w[idx]:
                     if cat == "全部":
                         f_w = wait_posts
-                    elif cat == "BOSS遠征":
+                    elif cat == "Boss遠征":
                         f_w = [p for p in wait_posts if p['target'] in boss_list]
                     elif cat == "組隊任務":
                         f_w = [p for p in wait_posts if p['target'] in pq_list]
