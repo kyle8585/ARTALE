@@ -68,7 +68,6 @@ def handle_signup():
 
 # --- 3. 介面邏輯分流 ---
 
-# 第一層：未登入
 if st.session_state.user is None:
     _, center, _ = st.columns([2, 1.2, 2])
     with center:
@@ -87,16 +86,13 @@ if st.session_state.user is None:
                 st.form_submit_button("註冊帳號", use_container_width=True, on_click=handle_signup)
 
 else:
-    # 已登入，獲取資訊
     current_user = st.session_state.user
     my_acc = current_user.email.split('@')[0]
     is_admin = (my_acc == ADMIN_ACC)
     all_jobs = ["英雄", "聖騎", "黑騎", "火毒", "冰雷", "主教", "刀賊", "標賊", "弓手", "弩手", "拳霸", "槍神"]
 
-    # 檢查是否有角色
     my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
 
-    # 第二層：登入成功但「沒角色」 -> 強制引導註冊
     if not my_chars:
         _, center, _ = st.columns([1.5, 1, 1.5])
         with center:
@@ -114,7 +110,6 @@ else:
                             "job": new_job,
                             "level": new_lvl
                         }).execute()
-                        st.success("角色創建成功！正在進入大廳...")
                         st.rerun()
                     else:
                         st.error("請輸入角色名稱")
@@ -123,7 +118,6 @@ else:
                 st.session_state.user = None;
                 st.rerun()
 
-    # 第三層：已有角色 -> 進入組隊大廳
     else:
         boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王"]
         pq_list = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神"]
@@ -133,7 +127,7 @@ else:
         char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
         char_options = list(char_map.keys())
 
-        # --- 側邊欄 ---
+        # --- 4. 側邊欄 (全面折疊化) ---
         with st.sidebar:
             st.header(f"👤 {my_acc}")
             if st.button("登出系統", use_container_width=True):
@@ -141,13 +135,17 @@ else:
                 st.session_state.user = None;
                 st.rerun()
 
-            with st.expander("🛡️ 我的角色管理"):
+            st.divider()
+
+            # 角色管理折疊
+            with st.expander("🛡️ 我的角色管理", expanded=False):
                 for c in my_chars:
                     c1, c2 = st.columns([3, 1])
                     c1.caption(f"{c['char_name']} (Lv.{c['level']})")
                     if c2.button("🗑️", key=f"side_del_{c['id']}"):
                         supabase.table("user_characters").delete().eq("id", c['id']).execute();
                         st.rerun()
+                st.write("---")
                 nc_name = st.text_input("新增角色名")
                 nc_job = st.selectbox("職業", all_jobs, key="side_job")
                 nc_lvl = st.number_input("等級", 1, 200, 100, key="side_lvl")
@@ -157,38 +155,39 @@ else:
                          "level": nc_lvl}).execute();
                     st.rerun()
 
-            st.divider()
-            st.subheader("📝 我要開團")
-            with st.form("party_form"):
-                s_char = st.selectbox("選擇角色", char_options)
-                t_title = st.text_input("隊伍標題")
-                t_target = st.selectbox("目標任務", all_targets)
-                if st.form_submit_button("發布組隊", use_container_width=True):
-                    c = char_map[s_char]
-                    supabase.table("party_posts").insert({
-                        "title": t_title if t_title else f"{c['char_name']} 的團",
-                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                        "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
-                        "note": "TYPE_PARTY"
-                    }).execute();
-                    st.rerun()
+            # 我要開團折疊
+            with st.expander("📝 我要開團", expanded=False):
+                with st.form("party_form", border=False):
+                    s_char = st.selectbox("選擇角色", char_options)
+                    t_title = st.text_input("隊伍標題")
+                    t_target = st.selectbox("目標任務", all_targets)
+                    if st.form_submit_button("發布組隊", use_container_width=True):
+                        c = char_map[s_char]
+                        supabase.table("party_posts").insert({
+                            "title": t_title if t_title else f"{c['char_name']} 的團",
+                            "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                            "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
+                            "note": "TYPE_PARTY"
+                        }).execute();
+                        st.rerun()
 
-            st.subheader("🙋 我要待組")
-            with st.form("waiting_form"):
-                w_char = st.selectbox("選擇角色", char_options, key="w_c")
-                w_target = st.selectbox("想參加的任務", all_targets, key="w_t")
-                w_note = st.text_input("留言 (例：熟圖、有火眼)", key="w_n")
-                if st.form_submit_button("登錄待組", use_container_width=True):
-                    c = char_map[w_char]
-                    supabase.table("party_posts").insert({
-                        "title": w_note if w_note else "徵求隊伍中",
-                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                        "target": w_target, "owner_id": str(current_user.id),
-                        "note": "TYPE_WAITING"
-                    }).execute();
-                    st.rerun()
+            # 我要待組折疊
+            with st.expander("🙋 我要待組", expanded=False):
+                with st.form("waiting_form", border=False):
+                    w_char = st.selectbox("選擇角色", char_options, key="w_c")
+                    w_target = st.selectbox("想參加的任務", all_targets, key="w_t")
+                    w_note = st.text_input("留言 (例：熟圖、有火眼)", key="w_n")
+                    if st.form_submit_button("登錄待組", use_container_width=True):
+                        c = char_map[w_char]
+                        supabase.table("party_posts").insert({
+                            "title": w_note if w_note else "徵求隊伍中",
+                            "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                            "target": w_target, "owner_id": str(current_user.id),
+                            "note": "TYPE_WAITING"
+                        }).execute();
+                        st.rerun()
 
-        # --- 主頁面 ---
+        # --- 5. 主頁面 ---
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
         all_data_raw = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
         all_data = []
@@ -234,7 +233,7 @@ else:
                                                     'id']).execute();
                                                 st.rerun()
                                     if st.button("➕ 加入隊伍", key=f"join_{cat}_{p['id']}", use_container_width=True):
-                                        tc = my_chars[0]  # 預設用第一個角色加入
+                                        tc = my_chars[0]
                                         m_list.append({"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
                                                        "owner_id": str(current_user.id)})
                                         supabase.table("party_posts").update({"members": m_list}).eq("id",
