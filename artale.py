@@ -27,8 +27,10 @@ def to_internal(acc):
 
 # --- 2. 登入介面 ---
 if st.session_state.user is None:
-    _, center, _ = st.columns([1, 1.5, 1])
+    # 調整比例：[2, 1, 2] 讓中間的登入框佔比變小，看起來更精緻
+    _, center, _ = st.columns([2, 1.2, 2])
     with center:
+        st.write("")  # 增加一點上方間距
         st.markdown("<h1 style='text-align: center;'>🍁 Artale 組隊中心</h1>", unsafe_allow_html=True)
         t1, t2 = st.tabs(["🔐 帳號登入", "📝 快速註冊"])
         with t1:
@@ -163,7 +165,6 @@ else:
                     with col1:
                         st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
                         if p.get('note'): st.info(f"📝 備註: {p['note']}")
-                        # 已移除原本在這裡的 st.code("/找人 ...") 列
 
                         st.divider()
                         st.write("👥 **隊員名單:**")
