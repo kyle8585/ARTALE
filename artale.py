@@ -161,20 +161,18 @@ else:
                         st.write("")
                         b1, b2, b3 = st.columns(3)
 
-                        with b1:  # 加入隊伍
+                        with b1: # 加入隊伍
                             if not is_owner:
                                 with st.popover("➕ 加入", use_container_width=True):
                                     m_job = st.selectbox("職業", all_jobs, key=f"j_{p['id']}")
                                     m_lvl = st.number_input("等級", 1, 200, 100, key=f"l_{p['id']}")
                                     if st.button("確認加入", key=f"btn_{p['id']}", use_container_width=True):
                                         m_list.append({"name": my_acc, "job": m_job, "level": m_lvl})
-                                        supabase.table("party_posts").update({"members": m_list}).eq("id",
-                                                                                                     p["id"]).execute()
+                                        supabase.table("party_posts").update({"members": m_list}).eq("id", p["id"]).execute()
                                         st.rerun()
-                                        else:
-                                        # 加上 key 確保每個隊伍的按鈕 ID 都是唯一的
-                                        st.button("隊長本人", disabled=True, use_container_width=True,
-                                                  key=f"owner_btn_{p['id']}")
+                            else:
+                                # 修正這裡：確保 else 與上面的 if not is_owner 對齊
+                                st.button("隊長本人", disabled=True, use_container_width=True, key=f"owner_btn_{p['id']}")
 
                         with b2:  # 修改備註 (僅限隊長)
                             if is_owner:
