@@ -18,6 +18,7 @@ def get_supabase():
 
 supabase = get_supabase()
 
+# 初始化 session_state
 if 'user' not in st.session_state: st.session_state.user = None
 
 
@@ -25,7 +26,33 @@ def to_internal(acc):
     return f"{acc.strip()}@artale.local"
 
 
-# --- 2. 登入/註冊介面 ---
+# --- 2. 登入與註冊處理函式 (解決點兩次問題) ---
+def handle_login():
+    acc = st.session_state.get("login_acc")
+    pwd = st.session_state.get("login_pwd")
+    if acc and pwd:
+        try:
+            res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
+            st.session_state.user = res.user
+        except:
+            st.error("❌ 登入失敗：請檢查帳號密碼。")
+
+
+def handle_signup():
+    new_acc = st.session_state.get("reg_acc")
+    new_pw = st.session_state.get("reg_pw")
+    input_key = st.session_state.get("reg_key")
+    if input_key == REG_SECRET:
+        try:
+            supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
+            st.success("✅ 註冊成功！請切換到登入分頁。")
+        except:
+            st.error("❌ 註冊失敗：帳號可能已存在。")
+    else:
+        st.error("❌ 金鑰錯誤，無法註冊")
+
+
+# --- 3. 登入/註冊介面 ---
 if st.session_state.user is None:
     _, center, _ = st.columns([2, 1.2, 2])
     with center:
@@ -34,31 +61,17 @@ if st.session_state.user is None:
         t1, t2 = st.tabs(["🔐 帳號登入", "📝 快速註冊"])
         with t1:
             with st.form("login_form"):
-                acc = st.text_input("帳號")
-                pwd = st.text_input("密碼", type="password")
-                if st.form_submit_button("立即登入", use_container_width=True):
-                    try:
-                        res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
-                        st.session_state.user = res.user
-                        st.rerun()
-                    except:
-                        st.error("❌ 登入失敗：請檢查帳號密碼。")
+                st.text_input("帳號", key="login_acc")
+                st.text_input("密碼", type="password", key="login_pwd")
+                st.form_submit_button("立即登入", use_container_width=True, on_click=handle_login)
         with t2:
             with st.form("signup_form"):
-                new_acc = st.text_input("自訂帳號")
-                new_pw = st.text_input("設定密碼 (至少6位)", type="password")
-                input_key = st.text_input("註冊金鑰", type="password")
-                if st.form_submit_button("註冊帳號", use_container_width=True):
-                    if input_key == REG_SECRET:
-                        try:
-                            supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
-                            st.success("✅ 註冊成功！")
-                        except:
-                            st.error("❌ 註冊失敗")
-                    else:
-                        st.error("❌ 金鑰錯誤")
+                st.text_input("自訂帳號", key="reg_acc")
+                st.text_input("設定密碼 (至少6位)", type="password", key="reg_pw")
+                st.text_input("註冊金鑰", type="password", key="reg_key", help="請輸入金鑰：artale")
+                st.form_submit_button("註冊帳號", use_container_width=True, on_click=handle_signup)
 else:
-    # --- 3. 登入後主程式 ---
+    # --- 4. 登入後主程式 ---
     current_user = st.session_state.user
     my_acc = current_user.email.split('@')[0]
     is_admin = (my_acc == ADMIN_ACC)
@@ -90,7 +103,7 @@ else:
             for c in my_chars:
                 c1, c2 = st.columns([3, 1])
                 c1.caption(f"{c['char_name']} (Lv.{c['level']} {c['job']})")
-                if c2.button("🗑️", key=f"side_del_c_{c['id']}"):
+                if c2.button("🗑️", key=f"side_del_{c['id']}"):
                     supabase.table("user_characters").delete().eq("id", c['id']).execute();
                     st.rerun()
             nc_name = st.text_input("角色名稱")
@@ -121,7 +134,7 @@ else:
                     }).execute();
                     st.rerun()
 
-    # --- 4. 主頁面 ---
+    # --- 5. 主頁面：列表與寬度優化 ---
     tabs = st.tabs(categories)
     posts = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
 
@@ -143,13 +156,10 @@ else:
                 is_leader = (str(p.get('owner_id')) == str(current_user.id))
                 has_admin = (is_leader or is_admin)
 
-                # 修正此處佈局定義，解決 NameError: col
                 col_main, col_btn = st.columns([0.94, 0.06])
-
                 with col_main:
                     label = f"【{p['target']}】 {p['title']} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
                     exp = st.expander(label, expanded=True)
-
                 with col_btn:
                     if has_admin:
                         if st.button("🗑️", key=f"del_{cat_name}_{p['id']}", type="primary"):
@@ -183,7 +193,8 @@ else:
                                     mn = st.text_input("隊員名稱", key=f"mn_{cat_name}_{p['id']}")
                                     mj = st.selectbox("職業", all_jobs, key=f"mj_{cat_name}_{p['id']}")
                                     ml = st.number_input("等級", 1, 200, 100, key=f"ml_{cat_name}_{p['id']}")
-                                    if st.button("確認手動加入", key=f"mb_{cat_name}_{p['id']}"):
+                                    if st.button("確認手動加入", key=f"mb_{cat_name}_{p['id']}",
+                                                 use_container_width=True):
                                         if mn:
                                             m_list.append({"name": mn, "job": mj, "level": ml, "owner_id": "manual"})
                                             supabase.table("party_posts").update({"members": m_list}).eq("id", p[
@@ -194,7 +205,7 @@ else:
                                 st.subheader("👤 以我的角色加入")
                                 if char_options:
                                     join_sel = st.selectbox("選取角色", char_options, key=f"js_{cat_name}_{p['id']}")
-                                    if st.button("確認加入", key=f"jb_{cat_name}_{p['id']}"):
+                                    if st.button("確認加入", key=f"jb_{cat_name}_{p['id']}", use_container_width=True):
                                         tc = char_map[join_sel]
                                         m_list.append({"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
                                                        "owner_id": str(current_user.id)})
@@ -209,7 +220,7 @@ else:
                                 with st.popover("✏️ 修改隊伍", use_container_width=True):
                                     ut = st.text_input("新標題", value=p['title'], key=f"ut_{cat_name}_{p['id']}")
                                     un = st.text_input("新備註", value=p['note'], key=f"un_{cat_name}_{p['id']}")
-                                    if st.button("更新資訊", key=f"ub_{cat_name}_{p['id']}"):
+                                    if st.button("更新資訊", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
                                         supabase.table("party_posts").update({"title": ut, "note": un}).eq("id", p[
                                             "id"]).execute();
                                         st.rerun()
