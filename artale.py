@@ -4,11 +4,11 @@ from supabase import create_client, Client
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# Supabase 連線資訊
+# Supabase 設定
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-# ⭐ 管理員帳號設定 (登入此帳號將擁有最高權限)
+# ⭐ 管理員帳號設定 (請確保這與你登入的帳號名稱一致)
 ADMIN_ACC = "admin"
 
 
@@ -44,7 +44,6 @@ if st.session_state.user is None:
                     except:
                         st.error("❌ 登入失敗：請檢查帳號密碼。")
         with t2:
-            st.caption("註冊後請切換至登入分頁。")
             with st.form("signup_form"):
                 new_acc = st.text_input("自訂帳號")
                 new_pw = st.text_input("設定密碼 (至少6位)", type="password")
@@ -61,9 +60,8 @@ else:
     my_acc = current_user.email.split('@')[0]
     is_admin = (my_acc == ADMIN_ACC)
 
-    # 常規清單定義
     all_jobs = ["英雄", "聖騎", "黑騎", "火毒", "冰雷", "主教", "刀賊", "標賊", "弓手", "弩手", "拳霸", "槍神"]
-    boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴力魔", "龍王"]
+    boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王"]
     pq_list = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神"]
     grind_list = ["蛋龍"]
     all_targets = pq_list + boss_list + grind_list
@@ -74,7 +72,9 @@ else:
         my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
     except:
         my_chars = []
-    char_options = [f"{c['char_name']} (Lv.{c['level']} {c['job']})" for c in my_chars]
+
+    char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
+    char_options = list(char_map.keys())
 
     with st.sidebar:
         st.header(f"👤 {my_acc} {'[管理者]' if is_admin else ''}")
@@ -104,25 +104,29 @@ else:
         st.divider()
         st.header("📝 我要開團")
         with st.form("party_form", clear_on_submit=True):
-            selected_char = st.selectbox("選擇發團角色", ["手動輸入"] + char_options)
+            selected_char_label = st.selectbox("選擇發團角色", ["請選擇角色"] + char_options)
             title = st.text_input("隊伍標題")
             target = st.selectbox("目標", all_targets)
             note = st.text_input("備註")
-            m_job = st.selectbox("手動職業", all_jobs) if selected_char == "手動輸入" else None
-            m_lvl = st.number_input("手動等級", 1, 200, 120) if selected_char == "手動輸入" else None
             if st.form_submit_button("發布組隊", use_container_width=True):
-                f_name, f_job, f_lvl = my_acc, m_job, m_lvl
-                if selected_char != "手動輸入":
-                    c_idx = char_options.index(selected_char)
-                    f_name, f_job, f_lvl = my_chars[c_idx]['char_name'], my_chars[c_idx]['job'], my_chars[c_idx][
-                        'level']
-                supabase.table("party_posts").insert(
-                    {"title": title if title else f"{f_name} 的組隊", "char_name": f_name, "job": f_job, "level": f_lvl,
-                     "target": target, "note": note, "owner_id": str(current_user.id), "members": [],
-                     "messages": []}).execute();
-                st.rerun()
+                if selected_char_label != "請選擇角色":
+                    c_data = char_map[selected_char_label]
+                    supabase.table("party_posts").insert({
+                        "title": title if title else f"{c_data['char_name']} 的團",
+                        "char_name": c_data['char_name'],
+                        "job": c_data['job'],
+                        "level": c_data['level'],
+                        "target": target,
+                        "note": note,
+                        "owner_id": str(current_user.id),
+                        "members": [],
+                        "messages": []
+                    }).execute();
+                    st.rerun()
+                else:
+                    st.warning("請先選擇一個角色再發帖！")
 
-    # --- 主頁面：分頁列表 ---
+    # --- 4. 主頁面：列表顯示 ---
     tabs = st.tabs(categories)
     posts = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
 
@@ -141,24 +145,28 @@ else:
 
             for p in filtered:
                 m_list = p.get('members', [])
-                is_owner = (str(p.get('owner_id')) == str(current_user.id))
-                has_admin_power = (is_owner or is_admin)
+                # 權限判定
+                is_leader = (str(p.get('owner_id')) == str(current_user.id))
+                has_admin_power = (is_leader or is_admin)
 
-                # --- 右上角刪除列設計 ---
+                # --- [重點] 右上角佈局：標題佔 92%，刪除鈕佔 8% ---
                 col_title, col_del = st.columns([0.92, 0.08])
+
                 with col_title:
                     label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
                     exp = st.expander(label)
+
                 with col_del:
                     if has_admin_power:
-                        if st.button("🗑️", key=f"top_del_{p['id']}", help="撤銷組隊", type="primary"):
+                        # 僅隊長與管理員可見此按鈕
+                        if st.button("🗑️", key=f"top_del_{p['id']}", help="刪除整個隊伍", type="primary"):
                             supabase.table("party_posts").delete().eq("id", p["id"]).execute();
                             st.rerun()
 
-                # --- 展開後的詳細內容 ---
+                # --- Expander 內部詳細資訊 ---
                 with exp:
-                    c_info, c_chat = st.columns([1, 1])
-                    with c_info:
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
                         st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
                         if p.get('note'): st.info(f"📝 備註: {p['note']}")
                         st.code(f"/找人 {p['char_name']}", language="bash")
@@ -167,64 +175,67 @@ else:
                         st.write("👥 **隊員名單:**")
                         for idx, m in enumerate(m_list):
                             mc1, mc2 = st.columns([4, 1.5])
+                            # 顯示角色名而非帳號名
                             mc1.write(f" └ {m['name']} (Lv.{m.get('level', '?')} {m['job']})")
 
                             m_owner_id = str(m.get('owner_id', ''))
                             if has_admin_power:
-                                if mc2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}"):
+                                if mc2.button("踢除", key=f"rm_{p['id']}_{idx}"):
                                     m_list.pop(idx);
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                  p["id"]).execute();
                                     st.rerun()
                             elif m_owner_id == str(current_user.id):
-                                if mc2.button("退出", key=f"ex_{cat_name}_{p['id']}_{idx}"):
+                                if mc2.button("退出", key=f"ex_{p['id']}_{idx}"):
                                     m_list.pop(idx);
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                  p["id"]).execute();
                                     st.rerun()
 
                         st.write("")
-                        btn_col1, btn_col2 = st.columns(2)
-                        with btn_col1:
-                            if not is_owner:
+                        btn_c1, btn_c2 = st.columns(2)
+                        with btn_c1:
+                            if not is_leader:
                                 with st.popover("➕ 加入隊伍", use_container_width=True):
-                                    join_char = st.selectbox("選角色", ["手動輸入"] + char_options,
-                                                             key=f"jc_{cat_name}_{p['id']}")
-                                    j_job = st.selectbox("職業", all_jobs,
-                                                         key=f"jj_{cat_name}_{p['id']}") if join_char == "手動輸入" else ""
-                                    j_lvl = st.number_input("等級", 1, 200, 100,
-                                                            key=f"jl_{cat_name}_{p['id']}") if join_char == "手動輸入" else 0
-                                    if st.button("確認加入", key=f"jb_{cat_name}_{p['id']}", use_container_width=True):
-                                        f_jn, f_jj, f_jl = my_acc, j_job, j_lvl
-                                        if join_char != "手動輸入":
-                                            c_idx = char_options.index(join_char)
-                                            f_jn, f_jj, f_jl = my_chars[c_idx]['char_name'], my_chars[c_idx]['job'], \
-                                            my_chars[c_idx]['level']
-                                        m_list.append({"name": f_jn, "job": f_jj, "level": f_jl,
-                                                       "owner_id": str(current_user.id)})
-                                        supabase.table("party_posts").update({"members": m_list}).eq("id",
-                                                                                                     p["id"]).execute();
-                                        st.rerun()
-                        with btn_col2:
+                                    if char_options:
+                                        join_label = st.selectbox("選擇角色", char_options, key=f"js_{p['id']}")
+                                        if st.button("確認加入", key=f"jb_{p['id']}", use_container_width=True):
+                                            target_c = char_map[join_label]
+                                            # 存入角色詳細資訊
+                                            m_list.append({
+                                                "name": target_c['char_name'],
+                                                "job": target_c['job'],
+                                                "level": target_c['level'],
+                                                "owner_id": str(current_user.id)
+                                            })
+                                            supabase.table("party_posts").update({"members": m_list}).eq("id", p[
+                                                "id"]).execute();
+                                            st.rerun()
+                                    else:
+                                        st.warning("請先在左側「我的角色管理」建立角色！")
+
+                        with btn_c2:
                             if has_admin_power:
                                 with st.popover("✏️ 修改資訊", use_container_width=True):
-                                    nt = st.text_input("新標題", value=p['title'], key=f"et_{cat_name}_{p['id']}")
-                                    nn = st.text_input("新備註", value=p['note'], key=f"en_{cat_name}_{p['id']}")
-                                    if st.button("更新", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
+                                    nt = st.text_input("新標題", value=p['title'], key=f"et_{p['id']}")
+                                    nn = st.text_input("新備註", value=p['note'], key=f"en_{p['id']}")
+                                    if st.button("更新", key=f"ub_{p['id']}", use_container_width=True):
                                         supabase.table("party_posts").update({"title": nt, "note": nn}).eq("id", p[
                                             "id"]).execute();
                                         st.rerun()
 
-                    with c_chat:
+                    with col2:
                         st.write("💬 隊伍聊天室")
                         c_box = st.container(height=250)
                         msgs = p.get('messages', [])
                         with c_box:
                             for m in msgs: st.markdown(f"**{m['user']}:** {m['text']}")
-                        with st.form(key=f"cf_{cat_name}_{p['id']}", clear_on_submit=True):
+                        with st.form(key=f"chat_{p['id']}", clear_on_submit=True):
                             f1, f2 = st.columns([4, 1])
-                            u_msg = f1.text_input("訊息", key=f"mi_{cat_name}_{p['id']}")
+                            u_msg = f1.text_input("訊息內容", key=f"mi_{p['id']}")
                             if f2.form_submit_button("送出") and u_msg:
-                                msgs.append({"user": my_acc, "text": u_msg});
+                                # 優先顯示角色名稱
+                                sender_name = my_chars[0]['char_name'] if my_chars else my_acc
+                                msgs.append({"user": sender_name, "text": u_msg})
                                 supabase.table("party_posts").update({"messages": msgs}).eq("id", p["id"]).execute();
                                 st.rerun()
