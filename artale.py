@@ -7,8 +7,8 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-# ⭐ 管理員帳號設定 (請把 "admin" 改成你註冊時用的帳號名稱)
-ADMIN_ACC = "akuy7788"
+# ⭐ 管理員帳號設定
+ADMIN_ACC = "admin"
 
 
 @st.cache_resource
@@ -60,15 +60,17 @@ if st.session_state.user is None:
 else:
     current_user = st.session_state.user
     my_acc = current_user.email.split('@')[0]
-
-    # 判斷是否為管理員
     is_admin = (my_acc == ADMIN_ACC)
 
+    # 先定義好所有清單，避免出現 NameError
     all_jobs = ["英雄", "聖騎", "黑騎", "火毒", "冰雷", "主教", "刀賊", "標賊", "弓手", "弩手", "拳霸", "槍神"]
-    all_targets = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神", "拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王",
-                   "蛋龍"]
+    boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "龍王"]
+    pq_list = ["101", "羅密歐與茱麗葉", "金勾海賊王", "女神"]
+    grind_list = ["蛋龍"]
+    all_targets = pq_list + boss_list + grind_list
     categories = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
 
+    # 讀取「我的角色」資料
     try:
         my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
     except:
@@ -123,6 +125,7 @@ else:
                      "messages": []}).execute()
                 st.rerun()
 
+    # 主頁面：顯示列表
     tabs = st.tabs(categories)
     try:
         posts = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
@@ -148,7 +151,7 @@ else:
                 m_list = p.get('members', [])
                 is_owner = (str(p.get('owner_id')) == str(current_user.id))
                 member_count = len(m_list) + 1
-                label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']}"
+                label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {member_count}/6"
 
                 with st.expander(label):
                     col_info, col_chat = st.columns([1, 1])
@@ -159,7 +162,7 @@ else:
                         for idx, m in enumerate(m_list):
                             c1, c2 = st.columns([4, 1])
                             c1.write(f" └ {m['name']} (Lv.{m.get('level', '?')} {m['job']})")
-                            if is_owner or is_admin:  # 管理員也能踢人
+                            if is_owner or is_admin:
                                 if c2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}"):
                                     m_list.pop(idx)
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
@@ -201,7 +204,6 @@ else:
                                             "id"]).execute()
                                         st.rerun()
                         with b3:
-                            # ⭐ 管理員可以看到所有隊伍的刪除按鈕
                             if is_owner or is_admin:
                                 del_label = "🔥 強制撤團" if is_admin and not is_owner else "🗑️ 撤團"
                                 if st.button(del_label, key=f"db_{cat_name}_{p['id']}", type="primary",
