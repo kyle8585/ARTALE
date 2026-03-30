@@ -194,4 +194,53 @@ else:
                                         mc1, mc2 = st.columns([4, 1])
                                         mc1.caption(f"└ {m['name']} (Lv.{m['level']} {m['job']})")
                                         if (str(p['owner_id']) == str(current_user.id) or is_admin or str(
-                                            m.get('owner_id')) == str
+                                                m.get('owner_id')) == str(current_user.id)):
+                                            if mc2.button("退出", key=f"k_{cat}_{p['id']}_{idx}"):
+                                                m_list.pop(idx);
+                                                supabase.table("party_posts").update({"members": m_list}).eq("id", p[
+                                                    'id']).execute();
+                                                st.rerun()
+
+                                    if st.button("➕ 加入隊伍", key=f"j_{cat}_{p['id']}", use_container_width=True,
+                                                 disabled=(is_full or is_joined)):
+                                        tc = my_chars[0]
+                                        m_list.append({"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
+                                                       "owner_id": str(current_user.id)})
+                                        supabase.table("party_posts").update({"members": m_list}).eq("id",
+                                                                                                     p['id']).execute();
+                                        st.rerun()
+                                with c2:
+                                    st.write("💬 聊天室")
+                                    msgs = p.get('messages', [])
+                                    for msg in msgs[-5:]: st.caption(f"**{msg['user']}**: {msg['text']}")
+                                    with st.form(key=f"ch_{cat}_{p['id']}", clear_on_submit=True):
+                                        it, bt = st.columns([3, 1])
+                                        txt = it.text_input("說話", label_visibility="collapsed",
+                                                            key=f"in_{cat}_{p['id']}")
+                                        if bt.form_submit_button("送出"):
+                                            if txt:
+                                                msgs.append({"user": my_chars[0]['char_name'], "text": txt})
+                                                supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
+                                                    'id']).execute();
+                                                st.rerun()
+                        with col_del:
+                            if str(p['owner_id']) == str(current_user.id) or is_admin:
+                                if st.button("🗑️", key=f"dp_{cat}_{p['id']}"):
+                                    supabase.table("party_posts").delete().eq("id", p['id']).execute();
+                                    st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+        with tab2:
+            st.caption("找團玩家")
+            wait_only = [p for p in active if p.get('note') == "TYPE_WAITING"]
+            for w in wait_only:
+                ci, ca = st.columns([0.9, 0.1])
+                with ci:
+                    st.markdown(
+                        f'<div style="border:1px solid #444; padding:10px; border-radius:10px; background:#1e1e1e; margin-bottom:5px;"><b>【{w["target"]}】</b> {w["char_name"]} (Lv.{w["level"]})<br><small>{w["title"]}</small></div>',
+                        unsafe_allow_html=True)
+                with ca:
+                    if str(w['owner_id']) == str(current_user.id) or is_admin:
+                        if st.button("🗑️", key=f"dw_{w['id']}"):
+                            supabase.table("party_posts").delete().eq("id", w['id']).execute();
+                            st.rerun()
