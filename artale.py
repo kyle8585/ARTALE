@@ -5,26 +5,29 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# 精準 CSS 修正
+# 精準 CSS 修正：區分「列表」與「表單」
 st.markdown("""
 <style>
-    /* 針對主頁面列表縮減間距，但不影響側邊欄 */
-    [data-testid="stMain"] [data-testid="stVerticalBlock"] {
-        gap: 0.3rem !important;
-    }
-
-    /* 針對摺疊面板 (Expander) 稍微縮減邊距 */
-    [data-testid="stMain"] div[data-testid="stExpander"] {
-        margin-top: -5px !important;
-        margin-bottom: -5px !important;
-    }
-
-    /* 側邊欄保持正常間距，避免重疊 */
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+    /* 1. 恢復所有表單內部的正常間距 (包含登入、註冊、側邊欄輸入) */
+    [data-testid="stForm"] [data-testid="stVerticalBlock"], 
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+    [data-testid="stPopover"] [data-testid="stVerticalBlock"] {
         gap: 1rem !important;
     }
 
-    /* 已加入隊伍的特別樣式 */
+    /* 2. 針對「隊伍列表」進行緊湊化處理 */
+    /* 縮減 Tab 內容區域的垂直間隙 */
+    [data-testid="stMain"] [data-testid="stVerticalBlock"] {
+        gap: 0.4rem !important;
+    }
+
+    /* 縮減列表摺疊面板 (Expander) 的外邊距，讓標題彼此靠近 */
+    [data-testid="stMain"] div[data-testid="stExpander"] {
+        margin-top: -8px !important;
+        margin-bottom: -8px !important;
+    }
+
+    /* 3. 特殊樣式：已加入隊伍的橘色邊框 */
     .joined-party [data-testid="stExpander"] {
         border: 2px solid #e67e22 !important;
         background-color: rgba(230, 126, 34, 0.05) !important;
@@ -72,7 +75,7 @@ def get_expiry_info(created_at_str):
 
 # --- 2. 登入/註冊介面 ---
 if st.session_state.user is None:
-    _, center, _ = st.columns([2, 1.5, 2])
+    _, center, _ = st.columns([2, 1.8, 2])
     with center:
         st.markdown("<h1 style='text-align: center;'>🍁 Artale 組隊中心</h1>", unsafe_allow_html=True)
         t1, t2 = st.tabs(["🔐 帳號登入", "📝 快速註冊"])
@@ -231,7 +234,7 @@ else:
                                         with st.popover("➕ 加入/新增隊員", use_container_width=True):
                                             sub_t1, sub_t2 = st.tabs(["選擇角色", "手動路人"])
                                             with sub_t1:
-                                                sel_to_join = st.selectbox("選擇要加入的角色", char_options,
+                                                sel_to_join = st.selectbox("選擇角色加入", char_options,
                                                                            key=f"sel_j_{cat_name}_{p['id']}")
                                                 if st.button("確認加入", key=f"btn_j_{cat_name}_{p['id']}"):
                                                     cj = char_map[sel_to_join]
@@ -247,7 +250,7 @@ else:
                                                 g_job = st.selectbox("職業", all_jobs, key=f"gj_{cat_name}_{p['id']}")
                                                 g_lvl = st.number_input("等級", 1, 200, 100,
                                                                         key=f"gl_{cat_name}_{p['id']}")
-                                                if st.button("新增路人", key=f"gb_{cat_name}_{p['id']}"):
+                                                if st.button("新增路員", key=f"gb_{cat_name}_{p['id']}"):
                                                     if g_name:
                                                         m_list.append({"name": g_name, "job": g_job, "level": g_lvl,
                                                                        "is_guest": True, "added_by": my_acc})
