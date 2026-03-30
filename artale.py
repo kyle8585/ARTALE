@@ -27,21 +27,16 @@ with st.sidebar:
         job = st.selectbox("隊長職業", all_jobs)
         level = st.number_input("隊長等級", 1, 200, 120)
         target = st.selectbox("目標", all_targets)
-        admin_pw = st.text_input("設置管理密碼 (選填)", type="password", help="設置後，修改或撤團需驗證此密碼")
+        admin_pw = st.text_input("設置管理密碼 (選填)", type="password", help="設置後，修改、踢人或撤團需驗證此密碼")
         note = st.text_input("備註")
         submit = st.form_submit_button("發布組隊", use_container_width=True)
 
         if submit and char_name:
             data = {
                 "title": new_title if new_title else f"{char_name} 的組隊",
-                "char_name": char_name,
-                "job": job,
-                "level": level,
-                "target": target,
-                "note": note,
+                "char_name": char_name, "job": job, "level": level, "target": target, "note": note,
                 "password": admin_pw if admin_pw else None,
-                "members": [],
-                "messages": []
+                "members": [], "messages": []
             }
             supabase.table("party_posts").insert(data).execute()
             st.success("發布成功！")
@@ -81,32 +76,21 @@ for i, cat_name in enumerate(categories):
 
                 with col_info:
                     st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
-                    if p.get('note'):
-                        st.caption(f"📝 備註: {p['note']}")
+                    if p.get('note'): st.caption(f"📝 備註: {p['note']}")
                     st.code(f"/找人 {p['char_name']}", language="bash")
 
                     st.divider()
                     st.write("👥 **隊員清單:**")
                     if m_list:
                         for idx, m in enumerate(m_list):
-                            mc1, mc2 = st.columns([4, 1])
-                            mc1.write(f" └ {m['name']} (Lv.{m.get('level', '??')} {m['job']})")
-
-                            if mc2.button("❌", key=f"kick_{cat_name}_{p['id']}_{idx}"):
-                                if p.get('password'):
-                                    st.error("此隊伍受密碼保護，請點擊下方的「✏️ 修改」輸入密碼進行成員管理。")
-                                else:
-                                    new_m_list = [member for i_m, member in enumerate(m_list) if i_m != idx]
-                                    supabase.table("party_posts").update({"members": new_m_list}).eq("id",
-                                                                                                     p["id"]).execute()
-                                    st.rerun()
+                            st.write(f" └ {m['name']} (Lv.{m.get('level', '??')} {m['job']})")
                     else:
                         st.caption("目前尚無隊員")
 
                     st.write("")
                     b1, b2, b3 = st.columns(3)
 
-                    # ➕ 加入隊伍 (無需密碼)
+                    # ➕ 加入隊伍
                     with b1:
                         with st.popover("➕ 加入", use_container_width=True):
                             m_name = st.text_input("你的 ID", key=f"in_name_{cat_name}_{p['id']}")
@@ -119,51 +103,69 @@ for i, cat_name in enumerate(categories):
                                                                                                  p["id"]).execute()
                                     st.rerun()
 
-                    # ✏️ 修改內容 (需要密碼)
+                    # ✏️ 修改與成員管理 (整合刪除功能)
                     with b2:
-                        with st.popover("✏️ 修改", use_container_width=True):
-                            new_t = st.text_input("新標題", value=p.get('title', ''),
-                                                  key=f"edit_t_{cat_name}_{p['id']}")
-                            new_n = st.text_input("新備註", value=p.get('note', ''), key=f"edit_n_{cat_name}_{p['id']}")
+                        with st.popover("✏️ 管理", use_container_width=True):
+                            new_t = st.text_input("修改標題", value=p.get('title', ''),
+                                                  key=f"ed_t_{cat_name}_{p['id']}")
+                            new_n = st.text_input("修改備註", value=p.get('note', ''), key=f"ed_n_{cat_name}_{p['id']}")
 
-                            if p.get('password'):
-                                input_pw = st.text_input("輸入管理密碼以修改", type="password",
-                                                         key=f"edit_pw_{cat_name}_{p['id']}")
-                                if st.button("儲存修改", key=f"edit_btn_{cat_name}_{p['id']}",
-                                             use_container_width=True):
-                                    if input_pw == p['password']:
-                                        supabase.table("party_posts").update({"title": new_t, "note": new_n}).eq("id",
-                                                                                                                 p[
-                                                                                                                     "id"]).execute()
-                                        st.success("修改成功！")
-                                        st.rerun()
-                                    else:
-                                        st.error("密碼錯誤！")
+                            st.write("---")
+                            st.write("👥 **成員移除:**")
+                            member_to_remove = None
+                            if m_list:
+                                for idx, m in enumerate(m_list):
+                                    c_m1, c_m2 = st.columns([3, 1])
+                                    c_m1.caption(f"{m['name']} ({m['job']})")
+                                    if c_m2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}"):
+                                        member_to_remove = idx
                             else:
-                                st.warning("此團未設密碼，任何人皆可修改。")
-                                if st.button("直接儲存", key=f"edit_btn_no_{cat_name}_{p['id']}",
-                                             use_container_width=True):
-                                    supabase.table("party_posts").update({"title": new_t, "note": new_n}).eq("id", p[
-                                        "id"]).execute()
-                                    st.rerun()
+                                st.caption("目前無隊員可移除")
 
-                    # 🗑️ 撤除全團 (需要密碼)
+                            st.write("---")
+                            input_pw = ""
+                            if p.get('password'):
+                                input_pw = st.text_input("輸入管理密碼", type="password",
+                                                         key=f"ed_pw_{cat_name}_{p['id']}")
+
+                            if st.button("執行變更", key=f"do_ed_{cat_name}_{p['id']}", use_container_width=True,
+                                         type="primary"):
+                                if not p.get('password') or input_pw == p['password']:
+                                    # 處理成員移除
+                                    final_m_list = m_list
+                                    if member_to_remove is not None:
+                                        final_m_list = [m for i_m, m in enumerate(m_list) if i_m != member_to_remove]
+
+                                    # 更新資料庫
+                                    supabase.table("party_posts").update({
+                                        "title": new_t,
+                                        "note": new_n,
+                                        "members": final_m_list
+                                    }).eq("id", p["id"]).execute()
+                                    st.success("變更已套用！")
+                                    st.rerun()
+                                else:
+                                    st.error("密碼錯誤！")
+
+                    # 🗑️ 撤除全團
                     with b3:
                         with st.popover("🗑️ 撤團", use_container_width=True):
+                            can_delete = False
                             if p.get('password'):
-                                check_pw = st.text_input("輸入管理密碼以撤團", type="password",
+                                check_pw = st.text_input("輸入密碼以撤團", type="password",
                                                          key=f"pw_chk_{cat_name}_{p['id']}")
                                 if st.button("確認撤團", key=f"real_del_{cat_name}_{p['id']}", type="primary"):
                                     if check_pw == p['password']:
-                                        supabase.table("party_posts").delete().eq("id", p["id"]).execute()
-                                        st.rerun()
+                                        can_delete = True
                                     else:
                                         st.error("密碼錯誤！")
                             else:
-                                st.warning("此團未設密碼，任何人皆可撤除。")
                                 if st.button("直接撤團", key=f"direct_del_{cat_name}_{p['id']}", type="primary"):
-                                    supabase.table("party_posts").delete().eq("id", p["id"]).execute()
-                                    st.rerun()
+                                    can_delete = True
+
+                            if can_delete:
+                                supabase.table("party_posts").delete().eq("id", p["id"]).execute()
+                                st.rerun()
 
                 with col_chat:
                     st.write("💬 **隊伍聊天室**")
@@ -171,8 +173,7 @@ for i, cat_name in enumerate(categories):
                     msg_list = p.get('messages', [])
                     with chat_box:
                         if not msg_list: st.caption("目前尚無訊息...")
-                        for m in msg_list:
-                            st.markdown(f"**{m['user']}:** {m['text']}")
+                        for m in msg_list: st.markdown(f"**{m['user']}:** {m['text']}")
 
                     with st.form(key=f"chat_form_{cat_name}_{p['id']}", clear_on_submit=True):
                         c1, c2 = st.columns([4, 1])
