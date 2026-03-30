@@ -7,7 +7,7 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-ADMIN_ACC = "admin"
+ADMIN_ACC = "akuy7788"
 
 
 @st.cache_resource
