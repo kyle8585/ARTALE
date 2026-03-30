@@ -245,17 +245,30 @@ else:
 
                                     # --- 新增：管理功能 (僅限隊長與管理員) ---
                                     if str(p['owner_id']) == str(current_user.id) or is_admin:
+                                        # 在 key 中加入 cat_name 確保唯一性
                                         with st.popover("⚙️ 管理隊伍 (修改標題/時間)", use_container_width=True):
-                                            new_title = st.text_input("編輯標題", value=p['title'], key=f"et_{p['id']}")
-                                            new_time = st.text_input("編輯時間", value=p_time_val, key=f"es_{p['id']}")
-                                            if st.button("更新隊伍資訊", key=f"ub_{p['id']}", use_container_width=True):
-                                                supabase.table("party_posts").update({
-                                                    "title": new_title,
-                                                    "start_time": new_time
-                                                }).eq("id", p['id']).execute()
-                                                st.success("更新成功！")
-                                                time.sleep(0.5)
-                                                st.rerun()
+                                            new_title = st.text_input(
+                                                "編輯標題",
+                                                value=p['title'],
+                                                key=f"et_{cat_name}_{p['id']}"  # 加入 cat_name
+                                            )
+                                            new_time = st.text_input(
+                                                "編輯時間",
+                                                value=p_time_val,
+                                                key=f"es_{cat_name}_{p['id']}"  # 加入 cat_name
+                                            )
+                                            if st.button("更新隊伍資訊", key=f"ub_{cat_name}_{p['id']}",
+                                                         use_container_width=True):
+                                                try:
+                                                    supabase.table("party_posts").update({
+                                                        "title": new_title,
+                                                        "start_time": new_time
+                                                    }).eq("id", p['id']).execute()
+                                                    st.success("更新成功！")
+                                                    time.sleep(0.5)
+                                                    st.rerun()
+                                                except Exception as e:
+                                                    st.error(f"更新失敗: {e}")
 
                                     st.divider()
                                     for m_idx, m in enumerate(m_list):
