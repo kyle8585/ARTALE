@@ -6,28 +6,24 @@ import time  # 用於解決登入與資料庫寫入的時間差問題
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# 精確 CSS 修正：區分「列表」與「表單」
+# 精確 CSS 修正
 st.markdown("""
 <style>
-    /* 1. 恢復所有表單內部的正常間距 (包含登入、註冊、側邊欄、彈出視窗) */
+    /* 1. 基礎間距修正 */
     [data-testid="stForm"] [data-testid="stVerticalBlock"], 
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
     [data-testid="stPopover"] [data-testid="stVerticalBlock"] {
         gap: 1rem !important;
     }
-
-    /* 2. 針對「隊伍列表」進行緊湊化處理 */
     [data-testid="stMain"] [data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
-
-    /* 縮減列表摺疊面板 (Expander) 的外邊距 */
     [data-testid="stMain"] div[data-testid="stExpander"] {
         margin-top: -8px !important;
         margin-bottom: -8px !important;
     }
 
-    /* 3. 特殊樣式：已加入隊伍的橘色邊框 */
+    /* 2. 特殊樣式：已加入隊伍 (橘色) */
     .joined-party [data-testid="stExpander"] {
         border: 2px solid #e67e22 !important;
         background-color: rgba(230, 126, 34, 0.05) !important;
@@ -36,6 +32,18 @@ st.markdown("""
     .joined-party [data-testid="stExpanderSummary"] { 
         color: #e67e22 !important; 
         font-weight: bold !important; 
+    }
+
+    /* 3. 特殊樣式：隊伍已滿 (紅色/灰色感) */
+    .full-party [data-testid="stExpander"] {
+        border: 2px solid #ff4b4b !important;
+        background-color: rgba(255, 75, 75, 0.05) !important;
+        border-radius: 10px !important;
+        opacity: 0.85;
+    }
+    .full-party [data-testid="stExpanderSummary"] {
+        color: #ff4b4b !important;
+        font-style: italic;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -85,23 +93,15 @@ if st.session_state.user is None:
                 pwd = st.text_input("密碼", type="password")
                 if st.form_submit_button("立即登入", use_container_width=True):
                     if acc and pwd:
-                        with st.spinner("正在驗證中，請稍候..."):
+                        with st.spinner("正在驗證中..."):
                             try:
-                                # 嘗試登入
-                                res = supabase.auth.sign_in_with_password({
-                                    "email": to_internal(acc),
-                                    "password": pwd
-                                })
-                                # 成功登入後的穩定處理
+                                res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
                                 if res.user:
                                     st.session_state.user = res.user
-                                    st.success("✅ 登入成功！正在進入系統...")
-                                    time.sleep(0.6)  # 給予足夠時間讓 Session 穩定寫入
+                                    time.sleep(0.6)
                                     st.rerun()
-                            except Exception:
-                                st.error("❌ 帳號或密碼錯誤，請重新輸入")
-                    else:
-                        st.warning("⚠️ 請輸入完整的帳號與密碼")
+                            except:
+                                st.error("❌ 帳號或密碼錯誤")
         with t2:
             with st.form("signup_form"):
                 new_acc = st.text_input("帳號")
@@ -111,19 +111,15 @@ if st.session_state.user is None:
                     if input_key == REG_SECRET:
                         try:
                             supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
-                            st.success("✅ 註冊成功，請切換至登入頁面")
+                            st.success("✅ 註冊成功")
                         except:
-                            st.error("註冊失敗，帳號可能已存在")
-                    else:
-                        st.error("邀請碼錯誤")
+                            st.error("註冊失敗")
 
 else:
-    # --- 3. 登入後邏輯 ---
     current_user = st.session_state.user
     my_acc = current_user.email.split('@')[0]
     is_admin = (my_acc == ADMIN_ACC)
     all_jobs = ["英雄", "聖騎", "黑騎", "火毒", "冰雷", "主教", "刀賊", "標賊", "弓手", "弩手", "拳霸", "槍神"]
-
     my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
 
     boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "暗黑龍王"]
@@ -131,7 +127,6 @@ else:
     grind_list = ["蛋龍"]
     task_options = ["--- Boss ---"] + boss_list + ["--- PQ ---"] + pq_list + ["--- 團練 ---"] + grind_list
 
-    # --- 4. 側邊欄 ---
     with st.sidebar:
         st.header(f"👤 {my_acc}")
         if st.button("登出系統", use_container_width=True):
@@ -169,49 +164,36 @@ else:
                     s_char = st.selectbox("選擇發起角色", char_options)
                     if st.form_submit_button("發布組隊", use_container_width=True):
                         if "---" not in t_target:
-                            with st.spinner("正在建立隊伍..."):
-                                try:
-                                    c = char_map[s_char]
-                                    supabase.table("party_posts").insert({
-                                        "title": t_title if t_title else f"{c['char_name']}的團",
-                                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                                        "target": t_target, "owner_id": str(current_user.id), "members": [],
-                                        "messages": [], "note": "TYPE_PARTY"
-                                    }).execute()
-                                    time.sleep(0.5)  # 緩衝：等待資料庫寫入完成
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error("❌ 發布失敗，請確認網路狀態")
-                        else:
-                            st.warning("⚠️ 請下拉選單，選擇一個明確的「目標任務」！")
+                            c = char_map[s_char]
+                            supabase.table("party_posts").insert({
+                                "title": t_title if t_title else f"{c['char_name']}的團",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
+                                "note": "TYPE_PARTY"
+                            }).execute();
+                            time.sleep(0.5);
+                            st.rerun()
 
             with st.expander("🙋 我要待組"):
                 with st.form("w_form", border=False):
-                    w_target = st.selectbox("想參加的任務", task_options, key="w_target_sb")
-                    w_note = st.text_input("留言/備註", placeholder="例如：熟練、有火眼", key="w_note_ti")
-                    w_char_sel = st.selectbox("使用角色", char_options, key="w_char_sb")
+                    w_target = st.selectbox("想參加的任務", task_options, key="w_target")
+                    w_note = st.text_input("備註")
+                    w_char_sel = st.selectbox("使用角色", char_options, key="w_char")
                     if st.form_submit_button("登錄待組", use_container_width=True):
                         if "---" not in w_target:
-                            with st.spinner("正在登錄中..."):
-                                try:
-                                    c = char_map[w_char_sel]
-                                    supabase.table("party_posts").insert({
-                                        "title": w_note if w_note else "徵求隊伍中",
-                                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                                        "target": w_target, "owner_id": str(current_user.id),
-                                        "members": [], "messages": [],  # 補上空陣列，防止資料表有必填限制導致報錯
-                                        "note": "TYPE_WAITING"
-                                    }).execute()
-                                    time.sleep(0.5)  # 緩衝：等待資料庫寫入完成
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error("❌ 登錄失敗，請確認網路狀態")
-                        else:
-                            st.warning("⚠️ 請下拉選單，選擇一個明確的「想參加的任務」！")
+                            c = char_map[w_char_sel]
+                            supabase.table("party_posts").insert({
+                                "title": w_note if w_note else "徵求隊伍中",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": w_target, "owner_id": str(current_user.id), "members": [], "messages": [],
+                                "note": "TYPE_WAITING"
+                            }).execute();
+                            time.sleep(0.5);
+                            st.rerun()
 
     # --- 5. 主頁面 ---
     if not my_chars:
-        st.warning("👋 歡迎！請先在左側建立角色後即可開始使用組隊功能。")
+        st.warning("👋 歡迎！請先在左側建立角色後即可開始使用。")
     else:
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
         raw_data = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
@@ -224,25 +206,34 @@ else:
 
             for idx, cat_name in enumerate(cats):
                 with sub_tabs[idx]:
-                    if cat_name == "全部":
-                        f = party_only
-                    elif cat_name == "Boss遠征":
+                    f = party_only
+                    if cat_name == "Boss遠征":
                         f = [p for p in party_only if p['target'] in boss_list]
                     elif cat_name == "組隊任務":
                         f = [p for p in party_only if p['target'] in pq_list]
-                    else:
+                    elif cat_name == "團練":
                         f = [p for p in party_only if p['target'] in grind_list]
 
                     for p in f:
                         m_list = p.get('members', [])
+                        cur_count = len(m_list) + 1
+                        is_full = cur_count >= 6
                         is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
                             p['owner_id']) == str(current_user.id)
 
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
-                            div_start = f'<div class="joined-party">' if is_joined else '<div>'
-                            st.markdown(div_start, unsafe_allow_html=True)
-                            with st.expander(f"【{p['target']}】 {p['title']} ｜ 👥 {len(m_list) + 1}/6"):
+                            # 根據狀態決定 CSS Class
+                            status_class = ""
+                            full_tag = ""
+                            if is_full:
+                                status_class = "full-party"
+                                full_tag = "(已滿) "
+                            elif is_joined:
+                                status_class = "joined-party"
+
+                            st.markdown(f'<div class="{status_class}">', unsafe_allow_html=True)
+                            with st.expander(f"{full_tag}【{p['target']}】 {p['title']} ｜ 👥 {cur_count}/6"):
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     st.markdown(f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']})")
@@ -261,7 +252,8 @@ else:
                                                     'id']).execute();
                                                 st.rerun()
 
-                                    if len(m_list) < 5:
+                                    # 如果隊伍沒滿才顯示加入按鈕
+                                    if not is_full:
                                         with st.popover("➕ 加入/新增隊員", use_container_width=True):
                                             sub_t1, sub_t2 = st.tabs(["選擇角色", "手動路人"])
                                             with sub_t1:
@@ -288,6 +280,8 @@ else:
                                                         supabase.table("party_posts").update({"members": m_list}).eq(
                                                             "id", p['id']).execute();
                                                         st.rerun()
+                                    else:
+                                        st.error("🚫 隊伍已滿，無法加入更多隊員。")
                                 with c2:
                                     st.write("💬 聊天室")
                                     msgs = p.get('messages', [])
