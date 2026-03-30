@@ -137,6 +137,7 @@ else:
             for p in filtered:
                 m_list = p.get('members', [])
                 is_owner = (str(p.get('owner_id')) == str(current_user.id))
+                has_admin_power = (is_owner or is_admin)  # 判定是否有管理權限
                 label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
 
                 with st.expander(label):
@@ -149,9 +150,9 @@ else:
                         for idx, m in enumerate(m_list):
                             c1, c2 = st.columns([4, 1])
                             c1.write(f" └ {m['name']} (Lv.{m.get('level', '?')} {m['job']})")
-                            # 退出與踢除邏輯 (比對 owner_id)
+
                             m_is_me = (str(m.get('owner_id')) == str(current_user.id))
-                            if is_owner or is_admin:
+                            if has_admin_power:
                                 if c2.button("踢除", key=f"rm_{cat_name}_{p['id']}_{idx}"):
                                     m_list.pop(idx);
                                     supabase.table("party_posts").update({"members": m_list}).eq("id",
@@ -181,7 +182,6 @@ else:
                                             c_idx = char_options.index(join_char)
                                             f_jn, f_jj, f_jl = my_chars[c_idx]['char_name'], my_chars[c_idx]['job'], \
                                             my_chars[c_idx]['level']
-                                        # 加入時儲存 owner_id 以便辨識退出權限
                                         m_list.append({"name": f_jn, "job": f_jj, "level": f_jl,
                                                        "owner_id": str(current_user.id)})
                                         supabase.table("party_posts").update({"members": m_list}).eq("id",
@@ -190,17 +190,19 @@ else:
                             else:
                                 st.button("隊長本人", disabled=True, use_container_width=True,
                                           key=f"ob_{cat_name}_{p['id']}")
+
                         with b2:
-                            if is_owner:
+                            if has_admin_power:  # 管理員與隊長皆可修改
                                 with st.popover("✏️ 修改", use_container_width=True):
-                                    nt = st.text_input("標題", value=p['title'], key=f"et_{cat_name}_{p['id']}")
-                                    nn = st.text_input("備註", value=p['note'], key=f"en_{cat_name}_{p['id']}")
-                                    if st.button("更新", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
+                                    nt = st.text_input("修改標題", value=p['title'], key=f"et_{cat_name}_{p['id']}")
+                                    nn = st.text_input("修改備註", value=p['note'], key=f"en_{cat_name}_{p['id']}")
+                                    if st.button("更新資訊", key=f"ub_{cat_name}_{p['id']}", use_container_width=True):
                                         supabase.table("party_posts").update({"title": nt, "note": nn}).eq("id", p[
                                             "id"]).execute();
                                         st.rerun()
+
                         with b3:
-                            if is_owner or is_admin:
+                            if has_admin_power:  # 管理員與隊長皆可撤團
                                 if st.button("🔥 撤團" if is_admin and not is_owner else "🗑️ 撤團",
                                              key=f"db_{cat_name}_{p['id']}", type="primary", use_container_width=True):
                                     supabase.table("party_posts").delete().eq("id", p["id"]).execute();
