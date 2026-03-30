@@ -171,8 +171,10 @@ else:
                                         supabase.table("party_posts").update({"members": m_list}).eq("id",
                                                                                                      p["id"]).execute()
                                         st.rerun()
-                            else:
-                                st.button("隊長本人", disabled=True, use_container_width=True)
+                                        else:
+                                        # 加上 key 確保每個隊伍的按鈕 ID 都是唯一的
+                                        st.button("隊長本人", disabled=True, use_container_width=True,
+                                                  key=f"owner_btn_{p['id']}")
 
                         with b2:  # 修改備註 (僅限隊長)
                             if is_owner:
