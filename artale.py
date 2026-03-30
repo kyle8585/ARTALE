@@ -84,7 +84,6 @@ else:
     char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
     char_options = list(char_map.keys())
 
-    # --- 側邊欄 ---
     with st.sidebar:
         st.header(f"👤 {my_acc}")
         if st.button("登出系統", use_container_width=True):
@@ -108,7 +107,6 @@ else:
                 st.rerun()
 
         st.divider()
-        # 發團功能
         st.subheader("📝 我要開團")
         with st.form("party_form"):
             s_char = st.selectbox("發團角色", ["請選擇"] + char_options)
@@ -125,12 +123,11 @@ else:
                     }).execute();
                     st.rerun()
 
-        # 待組功能
         st.subheader("🙋 我要待組")
         with st.form("waiting_form"):
             w_char = st.selectbox("待組角色", ["請選擇"] + char_options)
             w_target = st.selectbox("想參加的任務", all_targets)
-            w_note = st.text_input("簡單自介 (例：有洗血、熟圖)")
+            w_note = st.text_input("留言 (例：有洗血、熟圖)")
             if st.form_submit_button("登錄待組", use_container_width=True):
                 if w_char != "請選擇":
                     c = char_map[w_char]
@@ -144,10 +141,8 @@ else:
     # --- 5. 主頁面 ---
     main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
 
-    # 取得資料
     all_data = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
 
-    # --- 分頁一：隊伍列表 ---
     with main_tab1:
         cats = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
         sub_tabs = st.tabs(cats)
@@ -165,23 +160,63 @@ else:
                     filtered = [p for p in party_posts if p['target'] in grind_list]
 
                 for p in filtered:
+                    m_list = p.get('members', [])
+                    has_admin = (str(p['owner_id']) == str(current_user.id) or is_admin)
+
+                    # 修正點：key 加上了 cat 前綴，避免重複
                     col_m, col_d = st.columns([0.94, 0.06])
                     with col_m:
-                        exp = st.expander(
-                            f"【{p['target']}】 {p['title']} ｜ 👑 {p['char_name']} ｜ 👥 {len(p.get('members', [])) + 1}/6")
+                        exp = st.expander(f"【{p['target']}】 {p['title']} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6")
                         with exp:
-                            # 這裡保留原本的聊天室與加入邏輯...
-                            st.write(f"隊長：{p['char_name']} (Lv.{p['level']} {p['job']})")
-                            # (省略部分重複邏輯以節省空間，功能與之前一致)
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.write(f"👑 隊長：{p['char_name']} (Lv.{p['level']} {p['job']})")
+                                st.divider()
+                                st.write("👥 隊員名單：")
+                                for m_idx, m in enumerate(m_list):
+                                    mc1, mc2 = st.columns([4, 1])
+                                    mc1.write(f" └ {m['name']} (Lv.{m['level']} {m['job']})")
+                                    if has_admin or str(m.get('owner_id')) == str(current_user.id):
+                                        if mc2.button("退出", key=f"kick_{cat}_{p['id']}_{m_idx}"):
+                                            m_list.pop(m_idx);
+                                            supabase.table("party_posts").update({"members": m_list}).eq("id", p[
+                                                'id']).execute();
+                                            st.rerun()
+
+                                if st.button("➕ 加入隊伍", key=f"join_btn_{cat}_{p['id']}", use_container_width=True):
+                                    if char_options:
+                                        # 簡化加入邏輯，預設用第一個角色加入，或可再擴充 popover
+                                        tc = my_chars[0]
+                                        m_list.append({"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
+                                                       "owner_id": str(current_user.id)})
+                                        supabase.table("party_posts").update({"members": m_list}).eq("id",
+                                                                                                     p['id']).execute();
+                                        st.rerun()
+                                    else:
+                                        st.warning("請先建立角色")
+                            with c2:
+                                st.write("💬 聊天室")
+                                msgs = p.get('messages', [])
+                                for m in msgs[-5:]: st.caption(f"**{m['user']}**: {m['text']}")
+                                with st.form(key=f"chat_{cat}_{p['id']}", clear_on_submit=True):
+                                    ci, cb = st.columns([3, 1])
+                                    txt = ci.text_input("訊息", key=f"ti_{cat}_{p['id']}", label_visibility="collapsed")
+                                    if cb.form_submit_button("送出"):
+                                        if txt:
+                                            name = my_chars[0]['char_name'] if my_chars else my_acc
+                                            msgs.append({"user": name, "text": txt})
+                                            supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
+                                                'id']).execute();
+                                            st.rerun()
                     with col_d:
-                        if str(p['owner_id']) == str(current_user.id) or is_admin:
-                            if st.button("🗑️", key=f"del_p_{p['id']}"):
+                        if has_admin:
+                            # 修正點：key 加上了 cat 前綴
+                            if st.button("🗑️", key=f"del_p_{cat}_{p['id']}"):
                                 supabase.table("party_posts").delete().eq("id", p['id']).execute();
                                 st.rerun()
 
-    # --- 分頁二：待組佈告欄 ---
     with main_tab2:
-        st.caption("這裡顯示正在尋找隊伍的玩家，隊長們可以主動聯絡他們！")
+        st.caption("以下為正在找團的玩家：")
         cats_w = ["全部", "BOSS遠征", "組隊任務", "野外團練"]
         sub_tabs_w = st.tabs(cats_w)
         waiting_posts = [p for p in all_data if p.get('is_waiting', True)]
@@ -197,26 +232,21 @@ else:
                 else:
                     f_w = [p for p in waiting_posts if p['target'] in grind_list]
 
-                if not f_w:
-                    st.write("目前沒有人在此分類待組中。")
-
-                # 使用表格或卡片方式呈現待組人員
                 for w in f_w:
                     col_info, col_act = st.columns([0.9, 0.1])
                     with col_info:
-                        # 顯示醒目的待組資訊
                         st.markdown(f"""
-                        <div style="border: 1px solid #444; padding: 10px; border-radius: 5px; background-color: #1e1e1e;">
+                        <div style="border: 1px solid #444; padding: 10px; border-radius: 5px; background-color: #1e1e1e; margin-bottom: 10px;">
                             <span style="color: #ffaa00; font-weight: bold;">【{w['target']}】</span> 
-                            <span style="font-size: 1.1em;">{w['char_name']}</span> 
-                            (Lv.{w['level']} {w['job']}) 
+                            <span style="font-size: 1.1em; color: #fff;">{w['char_name']}</span> 
+                            <span style="color: #ccc;">(Lv.{w['level']} {w['job']})</span> 
                             <br>
                             <span style="color: #888; font-size: 0.9em;">💬 留言：{w['title']}</span>
                         </div>
                         """, unsafe_allow_html=True)
                     with col_act:
                         if str(w['owner_id']) == str(current_user.id) or is_admin:
-                            if st.button("撤回", key=f"del_w_{w['id']}", use_container_width=True):
+                            # 修正點：key 加上了 cat 前綴
+                            if st.button("撤回", key=f"del_w_{cat}_{w['id']}", use_container_width=True):
                                 supabase.table("party_posts").delete().eq("id", w['id']).execute();
                                 st.rerun()
-                    st.write("")  # 間距
