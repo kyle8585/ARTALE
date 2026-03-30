@@ -5,16 +5,30 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# CSS 樣式：美化 UI
+# CSS 樣式：美化 UI 並縮減欄位間距
 st.markdown("""
 <style>
-    [data-testid="stVerticalBlock"] > div { padding-top: 0.1rem; padding-bottom: 0.1rem; }
+    /* 縮減所有元件之間的預設間距 */
+    [data-testid="stVerticalBlock"] > div {
+        padding-top: 0.05rem !important;
+        padding-bottom: 0.05rem !important;
+    }
+
+    /* 縮減摺疊面板 (Expander) 的外邊距 */
+    div[data-testid="stExpander"] {
+        margin-bottom: -10px !important;
+    }
+
+    /* 已加入隊伍的特別樣式 */
     .joined-party [data-testid="stExpander"] {
         border: 2px solid #e67e22 !important;
         background-color: rgba(230, 126, 34, 0.05) !important;
         border-radius: 10px !important;
     }
-    .joined-party [data-testid="stExpanderSummary"] { color: #e67e22 !important; font-weight: bold !important; }
+    .joined-party [data-testid="stExpanderSummary"] { 
+        color: #e67e22 !important; 
+        font-weight: bold !important; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,7 +108,7 @@ else:
     grind_list = ["蛋龍"]
     task_options = ["--- Boss ---"] + boss_list + ["--- PQ ---"] + pq_list + ["--- 團練 ---"] + grind_list
 
-    # --- 4. 側邊欄 (修正補回待組功能) ---
+    # --- 4. 側邊欄 ---
     with st.sidebar:
         st.header(f"👤 {my_acc}")
         if st.button("登出系統", use_container_width=True):
@@ -103,7 +117,6 @@ else:
             st.rerun()
         st.divider()
 
-        # 角色管理
         with st.expander("🛡️ 角色管理"):
             for c in my_chars:
                 c1, c2 = st.columns([3, 1])
@@ -126,7 +139,6 @@ else:
             char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
             char_options = list(char_map.keys())
 
-            # 我要開團
             with st.expander("📝 我要開團"):
                 with st.form("p_form", border=False):
                     t_target = st.selectbox("目標任務", task_options)
@@ -143,7 +155,6 @@ else:
                             }).execute();
                             st.rerun()
 
-            # 我要待組 (剛才漏掉的部分在此補回)
             with st.expander("🙋 我要待組"):
                 with st.form("w_form", border=False):
                     w_target = st.selectbox("想參加的任務", task_options, key="w_target_sb")
@@ -192,6 +203,7 @@ else:
                         st.markdown(f'<div class="{div_class}">', unsafe_allow_html=True)
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
+                            # 這裡是核心組隊列表方塊
                             with st.expander(f"【{p['target']}】 {p['title']} ｜ 👥 {len(m_list) + 1}/6"):
                                 c1, c2 = st.columns(2)
                                 with c1:
@@ -213,7 +225,7 @@ else:
 
                                     if len(m_list) < 5:
                                         with st.popover("➕ 加入/新增隊員", use_container_width=True):
-                                            sub_t1, sub_t2 = st.tabs(["選擇我方角色", "手動新增路人"])
+                                            sub_t1, sub_t2 = st.tabs(["選擇角色", "手動路人"])
                                             with sub_t1:
                                                 sel_to_join = st.selectbox("選擇要加入的角色", char_options,
                                                                            key=f"sel_j_{cat_name}_{p['id']}")
@@ -265,9 +277,9 @@ else:
                 ci, ca = st.columns([0.9, 0.1])
                 with ci:
                     st.markdown(f'''
-                    <div style="border:1px solid #444; padding:12px; border-radius:10px; background:#1e1e1e; margin-bottom:8px;">
-                        <span style="color:#ffaa00; font-weight:bold;">【{w["target"]}】</span> {w["char_name"]} (Lv.{w["level"]} {w["job"]})<br>
-                        <small style="color:#bbb;">{w["title"]}</small>
+                    <div style="border:1px solid #444; padding:8px; border-radius:10px; background:#1e1e1e; margin-bottom:4px;">
+                        <span style="color:#ffaa00; font-weight:bold;">【{w["target"]}】</span> {w["char_name"]} (Lv.{w["level"]} {w["job"]}) 
+                        ｜ <small style="color:#bbb;">{w["title"]}</small>
                     </div>
                     ''', unsafe_allow_html=True)
                 with ca:
