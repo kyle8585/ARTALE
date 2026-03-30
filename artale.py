@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta, timezone
-import time  # 新增：用於解決登入跳轉過快的問題
+import time  # 用於解決登入與資料庫寫入的時間差問題
 
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
@@ -169,14 +169,21 @@ else:
                     s_char = st.selectbox("選擇發起角色", char_options)
                     if st.form_submit_button("發布組隊", use_container_width=True):
                         if "---" not in t_target:
-                            c = char_map[s_char]
-                            supabase.table("party_posts").insert({
-                                "title": t_title if t_title else f"{c['char_name']}的團",
-                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                                "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
-                                "note": "TYPE_PARTY"
-                            }).execute();
-                            st.rerun()
+                            with st.spinner("正在建立隊伍..."):
+                                try:
+                                    c = char_map[s_char]
+                                    supabase.table("party_posts").insert({
+                                        "title": t_title if t_title else f"{c['char_name']}的團",
+                                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                        "target": t_target, "owner_id": str(current_user.id), "members": [],
+                                        "messages": [], "note": "TYPE_PARTY"
+                                    }).execute()
+                                    time.sleep(0.5)  # 緩衝：等待資料庫寫入完成
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error("❌ 發布失敗，請確認網路狀態")
+                        else:
+                            st.warning("⚠️ 請下拉選單，選擇一個明確的「目標任務」！")
 
             with st.expander("🙋 我要待組"):
                 with st.form("w_form", border=False):
@@ -185,13 +192,22 @@ else:
                     w_char_sel = st.selectbox("使用角色", char_options, key="w_char_sb")
                     if st.form_submit_button("登錄待組", use_container_width=True):
                         if "---" not in w_target:
-                            c = char_map[w_char_sel]
-                            supabase.table("party_posts").insert({
-                                "title": w_note if w_note else "徵求隊伍中",
-                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
-                                "target": w_target, "owner_id": str(current_user.id), "note": "TYPE_WAITING"
-                            }).execute();
-                            st.rerun()
+                            with st.spinner("正在登錄中..."):
+                                try:
+                                    c = char_map[w_char_sel]
+                                    supabase.table("party_posts").insert({
+                                        "title": w_note if w_note else "徵求隊伍中",
+                                        "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                        "target": w_target, "owner_id": str(current_user.id),
+                                        "members": [], "messages": [],  # 補上空陣列，防止資料表有必填限制導致報錯
+                                        "note": "TYPE_WAITING"
+                                    }).execute()
+                                    time.sleep(0.5)  # 緩衝：等待資料庫寫入完成
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error("❌ 登錄失敗，請確認網路狀態")
+                        else:
+                            st.warning("⚠️ 請下拉選單，選擇一個明確的「想參加的任務」！")
 
     # --- 5. 主頁面 ---
     if not my_chars:
