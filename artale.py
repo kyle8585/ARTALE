@@ -7,8 +7,9 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
-# ⭐ 管理員帳號設定
+# ⭐ 管理員與註冊金鑰設定
 ADMIN_ACC = "akuy7788"
+REG_SECRET = "場外artale"
 
 
 @st.cache_resource
@@ -25,12 +26,11 @@ def to_internal(acc):
     return f"{acc.strip()}@artale.local"
 
 
-# --- 2. 登入介面 ---
+# --- 2. 登入/註冊介面 ---
 if st.session_state.user is None:
-    # 調整比例：[2, 1, 2] 讓中間的登入框佔比變小，看起來更精緻
     _, center, _ = st.columns([2, 1.2, 2])
     with center:
-        st.write("")  # 增加一點上方間距
+        st.write("")
         st.markdown("<h1 style='text-align: center;'>🍁 Artale 組隊中心</h1>", unsafe_allow_html=True)
         t1, t2 = st.tabs(["🔐 帳號登入", "📝 快速註冊"])
         with t1:
@@ -47,13 +47,19 @@ if st.session_state.user is None:
         with t2:
             with st.form("signup_form"):
                 new_acc = st.text_input("自訂帳號")
-                new_pw = st.text_input("密碼 (至少6位)", type="password")
+                new_pw = st.text_input("設定密碼 (至少6位)", type="password")
+                input_key = st.text_input("註冊金鑰", type="password", help="請輸入正確的金鑰才能註冊")
                 if st.form_submit_button("註冊帳號", use_container_width=True):
-                    try:
-                        supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
-                        st.success(f"✅ 註冊成功！帳號: {new_acc}")
-                    except Exception as e:
-                        st.error(f"❌ 註冊失敗: {e}")
+                    if input_key != REG_SECRET:
+                        st.error("❌ 金鑰錯誤，無法註冊！")
+                    elif len(new_pw) < 6:
+                        st.warning("密碼長度需至少 6 位")
+                    else:
+                        try:
+                            supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
+                            st.success(f"✅ 註冊成功！帳號: {new_acc}")
+                        except Exception as e:
+                            st.error(f"❌ 註冊失敗: {e}")
 else:
     # --- 3. 登入後主程式 ---
     current_user = st.session_state.user
@@ -147,10 +153,11 @@ else:
                 is_leader = (str(p.get('owner_id')) == str(current_user.id))
                 has_admin_power = (is_leader or is_admin)
 
-                # --- 右上角刪除佈局 ---
-                col_title, col_del = st.columns([0.92, 0.08])
+                # --- 優化後的列表寬度控制 ---
+                # 使用 [0.4, 0.05, 0.55] 這種比例讓前端資訊與按鈕緊湊在一起，後面留白
+                col_info, col_del, _ = st.columns([0.45, 0.05, 0.5])
 
-                with col_title:
+                with col_info:
                     label = f"【{p['target']}】 {p.get('title', '無標題')} ｜ 👑 {p['char_name']} ｜ 👥 {len(m_list) + 1}/6"
                     exp = st.expander(label)
 
