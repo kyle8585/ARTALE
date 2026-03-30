@@ -5,29 +5,23 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# 強力 CSS 修正：直接從根源縮減所有間距
+# 精準 CSS 修正
 st.markdown("""
 <style>
-    /* 1. 縮減最外層 Block 的垂直間隙 */
-    [data-testid="stVerticalBlock"] {
+    /* 針對主頁面列表縮減間距，但不影響側邊欄 */
+    [data-testid="stMain"] [data-testid="stVerticalBlock"] {
         gap: 0.3rem !important;
     }
 
-    /* 2. 針對 Tab 內部的內容縮減間距 */
-    [data-testid="stVerticalBlockBorderWrapper"] > div > div > div[data-testid="stVerticalBlock"] {
-        gap: 0.1rem !important;
-    }
-
-    /* 3. 摺疊面板 (Expander) 本身的邊距與內縮 */
-    div[data-testid="stExpander"] {
+    /* 針對摺疊面板 (Expander) 稍微縮減邊距 */
+    [data-testid="stMain"] div[data-testid="stExpander"] {
         margin-top: -5px !important;
         margin-bottom: -5px !important;
     }
 
-    /* 4. 縮減 Column 之間的間距 (讓垃圾桶更靠近標題) */
-    [data-testid="column"] {
-        width: min-content !important;
-        flex: 1 1 0% !important;
+    /* 側邊欄保持正常間距，避免重疊 */
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+        gap: 1rem !important;
     }
 
     /* 已加入隊伍的特別樣式 */
@@ -196,7 +190,6 @@ else:
 
             for idx, cat_name in enumerate(cats):
                 with sub_tabs[idx]:
-                    # 篩選資料
                     if cat_name == "全部":
                         f = party_only
                     elif cat_name == "Boss遠征":
@@ -206,7 +199,6 @@ else:
                     else:
                         f = [p for p in party_only if p['target'] in grind_list]
 
-                    # 這裡是讓隊伍緊湊排列的關鍵：不使用額外的容器，直接渲染 columns
                     for p in f:
                         m_list = p.get('members', [])
                         is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
@@ -214,7 +206,6 @@ else:
 
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
-                            # 加入 class 讓 CSS 識別已入隊
                             div_start = f'<div class="joined-party">' if is_joined else '<div>'
                             st.markdown(div_start, unsafe_allow_html=True)
                             with st.expander(f"【{p['target']}】 {p['title']} ｜ 👥 {len(m_list) + 1}/6"):
