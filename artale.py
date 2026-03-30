@@ -161,12 +161,14 @@ else:
                 with st.form("p_form", border=False):
                     t_target = st.selectbox("目標任務", task_options)
                     t_title = st.text_input("隊伍標題")
+                    t_time = st.text_input("開打時間", placeholder="例如：現打、20:30、滿開")
                     s_char = st.selectbox("選擇發起角色", char_options)
                     if st.form_submit_button("發布組隊", use_container_width=True):
                         if "---" not in t_target:
                             c = char_map[s_char]
                             supabase.table("party_posts").insert({
                                 "title": t_title if t_title else f"{c['char_name']}的團",
+                                "start_time": t_time if t_time else "未定",
                                 "char_name": c['char_name'], "job": c['job'], "level": c['level'],
                                 "target": t_target, "owner_id": str(current_user.id), "members": [], "messages": [],
                                 "note": "TYPE_PARTY"
@@ -221,6 +223,9 @@ else:
                         is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
                             p['owner_id']) == str(current_user.id)
 
+                        # 獲取時間資訊
+                        p_time_str = p.get('start_time', '未定')
+
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
                             # 根據狀態決定 CSS Class
@@ -233,10 +238,13 @@ else:
                                 status_class = "joined-party"
 
                             st.markdown(f'<div class="{status_class}">', unsafe_allow_html=True)
-                            with st.expander(f"{full_tag}【{p['target']}】 {p['title']} ｜ 👥 {cur_count}/6"):
+                            # 在標題中加入時間標籤
+                            with st.expander(
+                                    f"{full_tag}【{p['target']}】 {p['title']} ｜ 🕒 {p_time_str} ｜ 👥 {cur_count}/6"):
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     st.markdown(f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']})")
+                                    st.markdown(f"📅 **預計開打**：{p_time_str}")
                                     st.divider()
                                     for m_idx, m in enumerate(m_list):
                                         mc1, mc2 = st.columns([4, 1.5])
