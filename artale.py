@@ -1,14 +1,15 @@
 import streamlit as st
 from supabase import create_client, Client
 from datetime import datetime, timedelta, timezone
+import time  # 新增：用於解決登入跳轉過快的問題
 
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# 精準 CSS 修正：區分「列表」與「表單」
+# 精確 CSS 修正：區分「列表」與「表單」
 st.markdown("""
 <style>
-    /* 1. 恢復所有表單內部的正常間距 (包含登入、註冊、側邊欄輸入) */
+    /* 1. 恢復所有表單內部的正常間距 (包含登入、註冊、側邊欄、彈出視窗) */
     [data-testid="stForm"] [data-testid="stVerticalBlock"], 
     [data-testid="stSidebar"] [data-testid="stVerticalBlock"],
     [data-testid="stPopover"] [data-testid="stVerticalBlock"] {
@@ -16,12 +17,11 @@ st.markdown("""
     }
 
     /* 2. 針對「隊伍列表」進行緊湊化處理 */
-    /* 縮減 Tab 內容區域的垂直間隙 */
     [data-testid="stMain"] [data-testid="stVerticalBlock"] {
         gap: 0.4rem !important;
     }
 
-    /* 縮減列表摺疊面板 (Expander) 的外邊距，讓標題彼此靠近 */
+    /* 縮減列表摺疊面板 (Expander) 的外邊距 */
     [data-testid="stMain"] div[data-testid="stExpander"] {
         margin-top: -8px !important;
         margin-bottom: -8px !important;
@@ -84,12 +84,24 @@ if st.session_state.user is None:
                 acc = st.text_input("帳號")
                 pwd = st.text_input("密碼", type="password")
                 if st.form_submit_button("立即登入", use_container_width=True):
-                    try:
-                        res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
-                        st.session_state.user = res.user
-                        st.rerun()
-                    except:
-                        st.error("❌ 帳號或密碼錯誤")
+                    if acc and pwd:
+                        with st.spinner("正在驗證中，請稍候..."):
+                            try:
+                                # 嘗試登入
+                                res = supabase.auth.sign_in_with_password({
+                                    "email": to_internal(acc),
+                                    "password": pwd
+                                })
+                                # 成功登入後的穩定處理
+                                if res.user:
+                                    st.session_state.user = res.user
+                                    st.success("✅ 登入成功！正在進入系統...")
+                                    time.sleep(0.6)  # 給予足夠時間讓 Session 穩定寫入
+                                    st.rerun()
+                            except Exception:
+                                st.error("❌ 帳號或密碼錯誤，請重新輸入")
+                    else:
+                        st.warning("⚠️ 請輸入完整的帳號與密碼")
         with t2:
             with st.form("signup_form"):
                 new_acc = st.text_input("帳號")
@@ -97,8 +109,11 @@ if st.session_state.user is None:
                 input_key = st.text_input("邀請碼")
                 if st.form_submit_button("註冊", use_container_width=True):
                     if input_key == REG_SECRET:
-                        supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
-                        st.success("✅ 註冊成功，請登入")
+                        try:
+                            supabase.auth.sign_up({"email": to_internal(new_acc), "password": new_pw})
+                            st.success("✅ 註冊成功，請切換至登入頁面")
+                        except:
+                            st.error("註冊失敗，帳號可能已存在")
                     else:
                         st.error("邀請碼錯誤")
 
