@@ -7,6 +7,7 @@ st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="w
 URL = "https://ybhbqrlimofarkmcyrrk.supabase.co"
 KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliaGJxcmxpbW9mYXJrbWN5cnJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3OTM1MTMsImV4cCI6MjA5MDM2OTUxM30.4FQbRtE2mKR1XKhCJs4_tl94TRMCq8O9ORRtxk3bqto"
 
+# ⭐ 管理員帳號設定
 ADMIN_ACC = "akuy7788"
 
 
@@ -144,7 +145,7 @@ else:
                 is_leader = (str(p.get('owner_id')) == str(current_user.id))
                 has_admin_power = (is_leader or is_admin)
 
-                # --- 右上角佈局 ---
+                # --- 右上角刪除佈局 ---
                 col_title, col_del = st.columns([0.92, 0.08])
 
                 with col_title:
@@ -153,7 +154,6 @@ else:
 
                 with col_del:
                     if has_admin_power:
-                        # 刪除按鈕 key 加入 cat_name 避免重複
                         if st.button("🗑️", key=f"del_party_{cat_name}_{p['id']}", help="刪除隊伍", type="primary"):
                             supabase.table("party_posts").delete().eq("id", p["id"]).execute();
                             st.rerun()
@@ -163,7 +163,7 @@ else:
                     with col1:
                         st.markdown(f"**👑 隊長:** {p['char_name']} (Lv.{p['level']} {p['job']})")
                         if p.get('note'): st.info(f"📝 備註: {p['note']}")
-                        st.code(f"/找人 {p['char_name']}", language="bash")
+                        # 已移除原本在這裡的 st.code("/找人 ...") 列
 
                         st.divider()
                         st.write("👥 **隊員名單:**")
@@ -191,7 +191,6 @@ else:
                             if not is_leader:
                                 with st.popover("➕ 加入隊伍", use_container_width=True):
                                     if char_options:
-                                        # 關鍵修正：此處 key 加入了 cat_name
                                         join_label = st.selectbox("選擇角色", char_options,
                                                                   key=f"sel_join_{cat_name}_{p['id']}")
                                         if st.button("確認加入", key=f"btn_join_{cat_name}_{p['id']}",
