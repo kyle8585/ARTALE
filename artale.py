@@ -89,15 +89,24 @@ else:
             submit = st.form_submit_button("發布組隊", use_container_width=True)
 
             if submit:
+                # 確保 data 裡面的欄位與 SQL 完全對應
                 data = {
-                    "title": new_title if new_title else f"{my_acc} 的組隊",
-                    "char_name": my_acc, "job": job, "level": level, "target": target, "note": note,
-                    "owner_id": current_user.id,  # 綁定登入 ID
-                    "members": [], "messages": []
+                    "title": str(new_title) if new_title else f"{my_acc} 的組隊",
+                    "char_name": str(my_acc),
+                    "job": str(job),
+                    "level": int(level),
+                    "target": str(target),
+                    "note": str(note),
+                    "owner_id": str(current_user.id),  # 強制轉為字串避免 UUID 錯誤
+                    "members": [],
+                    "messages": []
                 }
-                supabase.table("party_posts").insert(data).execute()
-                st.success("發布成功！")
-                st.rerun()
+                try:
+                    supabase.table("party_posts").insert(data).execute()
+                    st.success("✅ 發布成功！")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 發布失敗，具體原因：{e}")
 
     # 主頁面：讀取資料
     tabs = st.tabs(categories)
