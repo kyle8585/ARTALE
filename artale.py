@@ -5,18 +5,29 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# CSS 樣式：美化 UI 並縮減欄位間距
+# 強力 CSS 修正：直接從根源縮減所有間距
 st.markdown("""
 <style>
-    /* 縮減所有元件之間的預設間距 */
-    [data-testid="stVerticalBlock"] > div {
-        padding-top: 0.05rem !important;
-        padding-bottom: 0.05rem !important;
+    /* 1. 縮減最外層 Block 的垂直間隙 */
+    [data-testid="stVerticalBlock"] {
+        gap: 0.3rem !important;
     }
 
-    /* 縮減摺疊面板 (Expander) 的外邊距 */
+    /* 2. 針對 Tab 內部的內容縮減間距 */
+    [data-testid="stVerticalBlockBorderWrapper"] > div > div > div[data-testid="stVerticalBlock"] {
+        gap: 0.1rem !important;
+    }
+
+    /* 3. 摺疊面板 (Expander) 本身的邊距與內縮 */
     div[data-testid="stExpander"] {
-        margin-bottom: -10px !important;
+        margin-top: -5px !important;
+        margin-bottom: -5px !important;
+    }
+
+    /* 4. 縮減 Column 之間的間距 (讓垃圾桶更靠近標題) */
+    [data-testid="column"] {
+        width: min-content !important;
+        flex: 1 1 0% !important;
     }
 
     /* 已加入隊伍的特別樣式 */
@@ -185,6 +196,7 @@ else:
 
             for idx, cat_name in enumerate(cats):
                 with sub_tabs[idx]:
+                    # 篩選資料
                     if cat_name == "全部":
                         f = party_only
                     elif cat_name == "Boss遠征":
@@ -194,16 +206,17 @@ else:
                     else:
                         f = [p for p in party_only if p['target'] in grind_list]
 
+                    # 這裡是讓隊伍緊湊排列的關鍵：不使用額外的容器，直接渲染 columns
                     for p in f:
                         m_list = p.get('members', [])
                         is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
                             p['owner_id']) == str(current_user.id)
-                        div_class = "joined-party" if is_joined else ""
 
-                        st.markdown(f'<div class="{div_class}">', unsafe_allow_html=True)
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
-                            # 這裡是核心組隊列表方塊
+                            # 加入 class 讓 CSS 識別已入隊
+                            div_start = f'<div class="joined-party">' if is_joined else '<div>'
+                            st.markdown(div_start, unsafe_allow_html=True)
                             with st.expander(f"【{p['target']}】 {p['title']} ｜ 👥 {len(m_list) + 1}/6"):
                                 c1, c2 = st.columns(2)
                                 with c1:
@@ -263,12 +276,12 @@ else:
                                                 supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
                                                     'id']).execute();
                                                 st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
                         with col_d:
                             if str(p['owner_id']) == str(current_user.id) or is_admin:
                                 if st.button("🗑️", key=f"dp_{cat_name}_{p['id']}"):
                                     supabase.table("party_posts").delete().eq("id", p['id']).execute();
                                     st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
 
         with main_tab2:
             st.caption("🔍 正在找團的玩家：")
