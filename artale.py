@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# CSS 樣式優化：摺疊面板變橘色 (針對已加入的隊伍)
+# CSS 樣式：美化 UI
 st.markdown("""
 <style>
     [data-testid="stVerticalBlock"] > div { padding-top: 0.1rem; padding-bottom: 0.1rem; }
@@ -94,7 +94,7 @@ else:
     grind_list = ["蛋龍"]
     task_options = ["--- Boss ---"] + boss_list + ["--- PQ ---"] + pq_list + ["--- 團練 ---"] + grind_list
 
-    # --- 4. 側邊欄 ---
+    # --- 4. 側邊欄 (修正補回待組功能) ---
     with st.sidebar:
         st.header(f"👤 {my_acc}")
         if st.button("登出系統", use_container_width=True):
@@ -103,6 +103,7 @@ else:
             st.rerun()
         st.divider()
 
+        # 角色管理
         with st.expander("🛡️ 角色管理"):
             for c in my_chars:
                 c1, c2 = st.columns([3, 1])
@@ -125,6 +126,7 @@ else:
             char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
             char_options = list(char_map.keys())
 
+            # 我要開團
             with st.expander("📝 我要開團"):
                 with st.form("p_form", border=False):
                     t_target = st.selectbox("目標任務", task_options)
@@ -141,9 +143,25 @@ else:
                             }).execute();
                             st.rerun()
 
+            # 我要待組 (剛才漏掉的部分在此補回)
+            with st.expander("🙋 我要待組"):
+                with st.form("w_form", border=False):
+                    w_target = st.selectbox("想參加的任務", task_options, key="w_target_sb")
+                    w_note = st.text_input("留言/備註", placeholder="例如：熟練、有火眼", key="w_note_ti")
+                    w_char_sel = st.selectbox("使用角色", char_options, key="w_char_sb")
+                    if st.form_submit_button("登錄待組", use_container_width=True):
+                        if "---" not in w_target:
+                            c = char_map[w_char_sel]
+                            supabase.table("party_posts").insert({
+                                "title": w_note if w_note else "徵求隊伍中",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": w_target, "owner_id": str(current_user.id), "note": "TYPE_WAITING"
+                            }).execute();
+                            st.rerun()
+
     # --- 5. 主頁面 ---
     if not my_chars:
-        st.warning("請先在左側建立角色")
+        st.warning("👋 歡迎！請先在左側建立角色後即可開始使用組隊功能。")
     else:
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
         raw_data = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
@@ -241,7 +259,7 @@ else:
                         st.markdown('</div>', unsafe_allow_html=True)
 
         with main_tab2:
-            st.caption("正在找團的玩家：")
+            st.caption("🔍 正在找團的玩家：")
             wait_posts = [p for p in all_data if p.get('note') == "TYPE_WAITING"]
             for w in wait_posts:
                 ci, ca = st.columns([0.9, 0.1])
