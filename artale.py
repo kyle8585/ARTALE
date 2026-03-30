@@ -45,6 +45,13 @@ st.markdown("""
         color: #ff4b4b !important;
         font-style: italic;
     }
+
+    /* 特殊樣式：導覽選中目標 (金黃色) */
+    .target-focus [data-testid="stExpander"] {
+        border: 3px solid #f1c40f !important;
+        box-shadow: 0px 0px 15px rgba(241, 196, 15, 0.4) !important;
+        background-color: rgba(241, 196, 15, 0.1) !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,6 +70,7 @@ def get_supabase():
 supabase = get_supabase()
 
 if 'user' not in st.session_state: st.session_state.user = None
+if 'target_party' not in st.session_state: st.session_state.target_party = None
 
 
 def to_internal(acc): return f"{acc.strip()}@artale.local"
@@ -98,7 +106,6 @@ if st.session_state.user is None:
                                 res = supabase.auth.sign_in_with_password({"email": to_internal(acc), "password": pwd})
                                 if res.user:
                                     st.session_state.user = res.user
-                                    time.sleep(0.6)
                                     st.rerun()
                             except:
                                 st.error("❌ 帳號或密碼錯誤")
@@ -120,7 +127,11 @@ else:
     my_acc = current_user.email.split('@')[0]
     is_admin = (my_acc == ADMIN_ACC)
     all_jobs = ["英雄", "聖騎", "黑騎", "火毒", "冰雷", "主教", "刀賊", "標賊", "弓手", "弩手", "拳霸", "槍神"]
+
+    # 預先讀取資料
     my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
+    raw_data = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
+    all_data = [d for d in raw_data if get_expiry_info(d['created_at'])]
 
     boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "暗黑龍王"]
     pq_list = ["101", "女神", "金勾海賊王", "羅密歐與茱麗葉"]
@@ -133,6 +144,28 @@ else:
             supabase.auth.sign_out()
             st.session_state.user = None
             st.rerun()
+
+        st.divider()
+
+        # --- 新增：我的隊伍快速導覽 ---
+        st.subheader("🚩 我的隊伍導覽")
+        my_joined_list = []
+        for p in all_data:
+            is_o = str(p['owner_id']) == str(current_user.id)
+            is_m = any(str(m.get('owner_id')) == str(current_user.id) for m in p.get('members', []))
+            if (is_o or is_m) and p.get('note') != "TYPE_WAITING":
+                my_joined_list.append(p)
+
+        if my_joined_list:
+            for p in my_joined_list:
+                role = "👑" if str(p['owner_id']) == str(current_user.id) else "⚔️"
+                btn_label = f"{role} {p['target']} | {p['start_time']}"
+                if st.button(btn_label, key=f"nav_{p['id']}", use_container_width=True):
+                    st.session_state.target_party = p['id']
+                    st.rerun()
+        else:
+            st.caption("尚未加入任何隊伍")
+
         st.divider()
 
         with st.expander("🛡️ 角色管理"):
@@ -198,8 +231,6 @@ else:
         st.warning("👋 歡迎！請先在左側建立角色後即可開始使用。")
     else:
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
-        raw_data = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
-        all_data = [d for d in raw_data if get_expiry_info(d['created_at'])]
 
         with main_tab1:
             cats = ["全部", "Boss遠征", "組隊任務", "團練"]
@@ -216,12 +247,17 @@ else:
                     elif cat_name == "團練":
                         f = [p for p in party_only if p['target'] in grind_list]
 
+                    # 排序：被導覽選中的隊伍置頂
+                    f = sorted(f, key=lambda x: x['id'] == st.session_state.target_party, reverse=True)
+
                     for p in f:
                         m_list = p.get('members', [])
                         cur_count = len(m_list) + 1
                         is_full = cur_count >= 6
-                        is_joined = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list) or str(
-                            p['owner_id']) == str(current_user.id)
+                        is_owner = str(p['owner_id']) == str(current_user.id)
+                        is_member = any(str(m.get('owner_id')) == str(current_user.id) for m in m_list)
+                        is_joined = is_owner or is_member
+                        is_target = st.session_state.target_party == p['id']
 
                         p_time_val = p.get('start_time', '現打')
 
@@ -229,7 +265,10 @@ else:
                         with col_m:
                             status_class = ""
                             full_tag = ""
-                            if is_full:
+                            if is_target:
+                                status_class = "target-focus"
+                                full_tag = "🎯 "
+                            elif is_full:
                                 status_class = "full-party"
                                 full_tag = "(已滿) "
                             elif is_joined:
@@ -237,33 +276,26 @@ else:
 
                             st.markdown(f'<div class="{status_class}">', unsafe_allow_html=True)
                             exp_label = f"{full_tag}【{p['target']}】{p['title']} ｜ 🕒 {p_time_val} ｜ 👥 {cur_count}/6"
-                            with st.expander(exp_label):
+
+                            # 若為目標則自動展開
+                            with st.expander(exp_label, expanded=is_target):
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     st.markdown(f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']})")
                                     st.markdown(f"⏰ **預計時間**：{p_time_val}")
 
-                                    # --- 新增：管理功能 (僅限隊長與管理員) ---
-                                    if str(p['owner_id']) == str(current_user.id) or is_admin:
-                                        # 在 key 中加入 cat_name 確保唯一性
+                                    if is_owner or is_admin:
                                         with st.popover("⚙️ 管理隊伍 (修改標題/時間)", use_container_width=True):
-                                            new_title = st.text_input(
-                                                "編輯標題",
-                                                value=p['title'],
-                                                key=f"et_{cat_name}_{p['id']}"  # 加入 cat_name
-                                            )
-                                            new_time = st.text_input(
-                                                "編輯時間",
-                                                value=p_time_val,
-                                                key=f"es_{cat_name}_{p['id']}"  # 加入 cat_name
-                                            )
+                                            new_title = st.text_input("編輯標題", value=p['title'],
+                                                                      key=f"et_{cat_name}_{p['id']}")
+                                            new_time = st.text_input("編輯時間", value=p_time_val,
+                                                                     key=f"es_{cat_name}_{p['id']}")
                                             if st.button("更新隊伍資訊", key=f"ub_{cat_name}_{p['id']}",
                                                          use_container_width=True):
                                                 try:
-                                                    supabase.table("party_posts").update({
-                                                        "title": new_title,
-                                                        "start_time": new_time
-                                                    }).eq("id", p['id']).execute()
+                                                    supabase.table("party_posts").update(
+                                                        {"title": new_title, "start_time": new_time}).eq("id", p[
+                                                        'id']).execute()
                                                     st.success("更新成功！")
                                                     time.sleep(0.5)
                                                     st.rerun()
@@ -277,8 +309,7 @@ else:
                                             'is_guest') else ""
                                         mc1.markdown(f"└ {m['name']} (Lv.{m['level']} {m['job']}){suffix}",
                                                      unsafe_allow_html=True)
-                                        if str(p['owner_id']) == str(current_user.id) or is_admin or str(
-                                                m.get('owner_id')) == str(current_user.id):
+                                        if is_owner or is_admin or str(m.get('owner_id')) == str(current_user.id):
                                             if mc2.button("退出", key=f"k_{cat_name}_{p['id']}_{m_idx}"):
                                                 m_list.pop(m_idx)
                                                 supabase.table("party_posts").update({"members": m_list}).eq("id", p[
@@ -323,13 +354,15 @@ else:
                                         txt = it.text_input("訊息", label_visibility="collapsed")
                                         if bt.form_submit_button("送出"):
                                             if txt:
-                                                msgs.append({"user": my_chars[0]['char_name'], "text": txt})
+                                                # 使用第一個角色名發言
+                                                speaker = my_chars[0]['char_name'] if my_chars else my_acc
+                                                msgs.append({"user": speaker, "text": txt})
                                                 supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
                                                     'id']).execute()
                                                 st.rerun()
                             st.markdown('</div>', unsafe_allow_html=True)
                         with col_d:
-                            if str(p['owner_id']) == str(current_user.id) or is_admin:
+                            if is_owner or is_admin:
                                 if st.button("🗑️", key=f"dp_{cat_name}_{p['id']}"):
                                     supabase.table("party_posts").delete().eq("id", p['id']).execute()
                                     st.rerun()
