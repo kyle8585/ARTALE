@@ -5,24 +5,17 @@ from datetime import datetime, timedelta, timezone
 # --- 1. 初始化與設定 ---
 st.set_page_config(page_title="Artale 組隊中心", page_icon="🍁", layout="wide")
 
-# CSS 注入：自定義 Expander 的顏色
+# 優化 CSS：讓顏色背景更緊湊，只針對標題列
 st.markdown("""
 <style>
-    /* 滿員的樣式 (深灰) */
-    .full-party {
-        background-color: #2d2d2d !important;
-        border-radius: 5px;
-        padding: 2px 10px;
+    /* 讓 Expander 標題列變色 */
+    .joined-party [data-testid="stExpander"] {
+        border: 2px solid #e67e22 !important;
+        background-color: rgba(230, 126, 34, 0.1) !important;
     }
-    /* 已加入的樣式 (橘色) */
-    .joined-party {
-        background-color: #e67e22 !important;
-        color: white !important;
-        border-radius: 5px;
-        padding: 2px 10px;
-    }
-    .joined-party p, .joined-party span {
-        color: white !important;
+    .full-party [data-testid="stExpander"] {
+        border: 1px solid #444 !important;
+        background-color: rgba(50, 50, 50, 0.5) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -48,7 +41,6 @@ def to_internal(acc):
     return f"{acc.strip()}@artale.local"
 
 
-# --- 2. 工具函式 ---
 def get_expiry_info(created_at_str):
     try:
         created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
@@ -74,7 +66,7 @@ def handle_login():
             st.error("❌ 帳號或密碼錯誤")
 
 
-# --- 3. 登入/註冊介面 ---
+# --- 2. 登入邏輯 ---
 if st.session_state.user is None:
     _, center, _ = st.columns([2, 1.2, 2])
     with center:
@@ -86,7 +78,7 @@ if st.session_state.user is None:
                 st.text_input("密碼", type="password", key="login_pwd")
                 st.form_submit_button("立即登入", use_container_width=True, on_click=handle_login)
         with t2:
-            st.info("請向管理員索取註冊金鑰")
+            st.info("註冊請洽管理員")
 
 else:
     current_user = st.session_state.user
@@ -97,10 +89,17 @@ else:
     my_chars = supabase.table("user_characters").select("*").eq("owner_id", str(current_user.id)).execute().data
 
     if not my_chars:
-        # 強制引導建立角色邏輯... (略過與上次相同)
-        st.warning("請先建立角色")
-        if st.button("點此建立角色"): st.rerun()
-
+        _, center, _ = st.columns([1.5, 1, 1.5])
+        with center:
+            st.markdown("### 🛡️ 建立第一個角色")
+            with st.form("init_char"):
+                n = st.text_input("角色名")
+                j = st.selectbox("職業", all_jobs)
+                l = st.number_input("等級", 1, 200, 30)
+                if st.form_submit_button("進入大廳"):
+                    supabase.table("user_characters").insert(
+                        {"owner_id": str(current_user.id), "char_name": n, "job": j, "level": l}).execute()
+                    st.rerun()
     else:
         boss_list = ["拉圖斯(普)", "拉圖斯(困難)", "殘暴炎魔", "暗黑龍王"]
         pq_list = ["101", "女神", "金勾海賊王", "羅密歐與茱麗葉"]
@@ -110,7 +109,7 @@ else:
         char_map = {f"{c['char_name']} (Lv.{c['level']} {c['job']})": c for c in my_chars}
         char_options = list(char_map.keys())
 
-        # --- 4. 側邊欄 ---
+        # --- 3. 側邊欄 (修正角色管理不見的問題) ---
         with st.sidebar:
             st.header(f"👤 {my_acc}")
             if st.button("登出系統", use_container_width=True):
@@ -120,15 +119,27 @@ else:
             st.divider()
 
             with st.expander("🛡️ 我的角色管理"):
-                # 角色管理邏輯... (與上次相同)
-                pass
+                for c in my_chars:
+                    c1, c2 = st.columns([3, 1])
+                    c1.caption(f"{c['char_name']} (Lv.{c['level']} {c['job']})")
+                    if c2.button("🗑️", key=f"del_char_{c['id']}"):
+                        supabase.table("user_characters").delete().eq("id", c['id']).execute();
+                        st.rerun()
+                st.write("---")
+                new_n = st.text_input("新增角色名")
+                new_j = st.selectbox("職業", all_jobs, key="nj")
+                new_l = st.number_input("等級", 1, 200, 100, key="nl")
+                if st.button("儲存新角色"):
+                    supabase.table("user_characters").insert(
+                        {"owner_id": str(current_user.id), "char_name": new_n, "job": new_j, "level": new_l}).execute();
+                    st.rerun()
 
             with st.expander("📝 我要開團"):
-                with st.form("party_form", border=False):
+                with st.form("p_form", border=False):
                     t_target = st.selectbox("目標任務", task_options)
                     t_title = st.text_input("隊伍標題")
                     s_char = st.selectbox("選擇角色", char_options)
-                    if st.form_submit_button("發布組隊", use_container_width=True):
+                    if st.form_submit_button("發布組隊"):
                         if "---" not in t_target:
                             c = char_map[s_char]
                             supabase.table("party_posts").insert({
@@ -140,11 +151,24 @@ else:
                             st.rerun()
 
             with st.expander("🙋 我要待組"):
-                # 待組邏輯... (與上次相同)
-                pass
+                with st.form("w_form", border=False):
+                    w_target = st.selectbox("想參加的任務", task_options, key="wt")
+                    w_note = st.text_input("留言", key="wn")
+                    w_char = st.selectbox("選擇角色", char_options, key="wc")
+                    if st.form_submit_button("登錄待組"):
+                        if "---" not in w_target:
+                            c = char_map[w_char]
+                            supabase.table("party_posts").insert({
+                                "title": w_note if w_note else "徵求隊伍中",
+                                "char_name": c['char_name'], "job": c['job'], "level": c['level'],
+                                "target": w_target, "owner_id": str(current_user.id),
+                                "note": "TYPE_WAITING"
+                            }).execute();
+                            st.rerun()
 
-        # --- 5. 主頁面 ---
+        # --- 4. 主頁面 ---
         main_tab1, main_tab2 = st.tabs(["⚔️ 隊伍列表", "🍁 待組佈告欄"])
+
         all_data_raw = supabase.table("party_posts").select("*").order("created_at", desc=True).execute().data
         all_data = []
         for d in all_data_raw:
@@ -171,78 +195,75 @@ else:
                         m_list = p.get('members', [])
                         cur_count = len(m_list) + 1
                         is_full = cur_count >= 6
-                        # 判斷登入者是否在隊伍中 (隊長或隊員)
                         is_joined = (str(p['owner_id']) == str(current_user.id)) or any(
                             str(m.get('owner_id')) == str(current_user.id) for m in m_list)
                         has_admin = (str(p['owner_id']) == str(current_user.id) or is_admin)
 
-                        # 動態標題標籤
-                        status_tag = " (滿員)" if is_full else ""
-                        title_prefix = "【" + p['target'] + "】 " + p['title'] + status_tag + f" ｜ 👥 {cur_count}/6"
+                        # 顯示邏輯
+                        div_class = "joined-party" if is_joined else ("full-party" if is_full else "normal-party")
+                        full_label = " (滿員)" if is_full else ""
 
-                        # 根據狀態決定外殼容器
+                        st.markdown(f'<div class="{div_class}">', unsafe_allow_html=True)
                         col_m, col_d = st.columns([0.94, 0.06])
                         with col_m:
-                            # 注入 HTML 標記來控制樣式
-                            div_class = "joined-party" if is_joined else ("full-party" if is_full else "")
-                            st.markdown(f'<div class="{div_class}">', unsafe_allow_html=True)
-
-                            with st.expander(title_prefix):
-                                st.markdown('</div>', unsafe_allow_html=True)  # 結束背景色影響範圍，不影響內部
+                            with st.expander(f"【{p['target']}】 {p['title']}{full_label} ｜ 👥 {cur_count}/6"):
                                 c1, c2 = st.columns(2)
                                 with c1:
                                     st.markdown(
-                                        f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']}) <span style='color: #888; margin-left: 10px; font-size: 0.85em;'>{p['expiry_label']}</span>",
+                                        f"👑 **隊長**：{p['char_name']} (Lv.{p['level']} {p['job']}) <span style='color: #888; font-size: 0.8em;'>{p['expiry_label']}</span>",
                                         unsafe_allow_html=True)
                                     st.divider()
-                                    st.write("👥 隊員名單：")
-                                    for m_idx, m in enumerate(m_list):
-                                        mc1, mc2 = st.columns([4, 1.5])
-                                        mc1.write(f" └ {m['name']} (Lv.{m['level']} {m['job']})")
+                                    for i, m in enumerate(m_list):
+                                        mc1, mc2 = st.columns([4, 1])
+                                        mc1.caption(f"└ {m['name']} (Lv.{m['level']} {m['job']})")
                                         if has_admin or str(m.get('owner_id')) == str(current_user.id):
-                                            if mc2.button("退出", key=f"kick_{cat}_{p['id']}_{m_idx}"):
-                                                m_list.pop(m_idx);
+                                            if mc2.button("退出", key=f"k_{p['id']}_{i}"):
+                                                m_list.pop(i);
                                                 supabase.table("party_posts").update({"members": m_list}).eq("id", p[
                                                     'id']).execute();
                                                 st.rerun()
 
-                                    # 加入按鈕：滿員時禁用
-                                    if st.button("➕ 加入隊伍", key=f"join_{cat}_{p['id']}", use_container_width=True,
-                                                 disabled=is_full):
-                                        if not any(
-                                                str(m.get('owner_id')) == str(current_user.id) for m in m_list) and str(
-                                                p['owner_id']) != str(current_user.id):
-                                            tc = my_chars[0]
-                                            m_list.append(
-                                                {"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
-                                                 "owner_id": str(current_user.id)})
-                                            supabase.table("party_posts").update({"members": m_list}).eq("id", p[
-                                                'id']).execute();
-                                            st.rerun()
-                                        else:
-                                            st.warning("你已在隊伍中")
+                                    if st.button("➕ 加入隊伍", key=f"j_{p['id']}", use_container_width=True,
+                                                 disabled=(is_full or is_joined)):
+                                        tc = my_chars[0]
+                                        m_list.append({"name": tc['char_name'], "job": tc['job'], "level": tc['level'],
+                                                       "owner_id": str(current_user.id)})
+                                        supabase.table("party_posts").update({"members": m_list}).eq("id",
+                                                                                                     p['id']).execute();
+                                        st.rerun()
                                 with c2:
                                     st.write("💬 聊天室")
                                     msgs = p.get('messages', [])
                                     for msg in msgs[-5:]: st.caption(f"**{msg['user']}**: {msg['text']}")
-                                    with st.form(key=f"chat_{cat}_{p['id']}", clear_on_submit=True):
-                                        ci, cb = st.columns([3, 1.2])
-                                        txt = ci.text_input("訊息", key=f"ti_{cat}_{p['id']}",
-                                                            label_visibility="collapsed")
-                                        if cb.form_submit_button("送出", use_container_width=True):
-                                            if txt:
-                                                msgs.append({"user": my_chars[0]['char_name'], "text": txt})
-                                                supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
-                                                    'id']).execute();
-                                                st.rerun()
-                            st.markdown('</div>', unsafe_allow_html=True)
-
+                                    with st.form(key=f"ch_{p['id']}", clear_on_submit=True):
+                                        it, bt = st.columns([3, 1])
+                                        txt = it.text_input("說點什麼", label_visibility="collapsed")
+                                        if bt.form_submit_button("送出"):
+                                            msgs.append({"user": my_chars[0]['char_name'], "text": txt})
+                                            supabase.table("party_posts").update({"messages": msgs}).eq("id", p[
+                                                'id']).execute();
+                                            st.rerun()
                         with col_d:
                             if has_admin:
-                                if st.button("🗑️", key=f"del_{cat}_{p['id']}"):
+                                if st.button("🗑️", key=f"dp_{p['id']}"):
                                     supabase.table("party_posts").delete().eq("id", p['id']).execute();
                                     st.rerun()
+                        st.markdown('</div>', unsafe_allow_html=True)
 
         with main_tab2:
-            # 待組佈告欄邏輯... (維持原樣)
-            pass
+            st.caption("找團玩家佈告欄")
+            wait_posts = [p for p in all_data if p.get('note') == "TYPE_WAITING"]
+            for w in wait_posts:
+                col_i, col_a = st.columns([0.9, 0.1])
+                with col_i:
+                    st.markdown(f"""
+                    <div style="border:1px solid #444; padding:10px; border-radius:5px; background:#1e1e1e; margin-bottom:10px;">
+                        <span style="color:#ffaa00; font-weight:bold;">【{w['target']}】</span> {w['char_name']} (Lv.{w['level']} {w['job']})
+                        <div style="color:#888; font-size:0.9em;">{w['title']} | {w['expiry_label']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_a:
+                    if str(w['owner_id']) == str(current_user.id) or is_admin:
+                        if st.button("撤回", key=f"dw_{w['id']}"):
+                            supabase.table("party_posts").delete().eq("id", w['id']).execute();
+                            st.rerun()
